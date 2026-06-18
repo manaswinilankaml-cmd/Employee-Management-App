@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Employee Management System — Architecture Dashboard</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      fontFamily: { sans: ['system-ui', '-apple-system', 'sans-serif'] },
+      colors: {
+        surface: { 50: '#f8fafc', 100: '#f1f5f9', 200: '#e2e8f0', 300: '#cbd5e1', 700: '#334155', 800: '#1e293b', 900: '#0f172a' },
+        accent: { 500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8' },
+        green: { 100: '#dcfce7', 500: '#22c55e', 700: '#15803d' },
+        red: { 100: '#fee2e2', 500: '#ef4444', 700: '#b91c1c' },
+        amber: { 100: '#fef3c7', 500: '#f59e0b', 700: '#b45309' },
+      }
+    }
+  }
+}
+</script>
+<style>
+  * { box-sizing: border-box; }
+  body { background: #0f172a; color: #e2e8f0; }
+  .tab-btn { transition: all 0.2s; }
+  .tab-btn.active { background: #1e293b; color: #3b82f6; border-bottom: 2px solid #3b82f6; }
+  .tab-btn:not(.active):hover { background: #1e293b80; }
+  .card { background: #1e293b; border: 1px solid #334155; border-radius: 8px; }
+  .toggle-track { width: 36px; height: 20px; border-radius: 10px; cursor: pointer; transition: background 0.2s; position: relative; }
+  .toggle-track.on { background: #22c55e; }
+  .toggle-track.off { background: #475569; }
+  .toggle-thumb { width: 16px; height: 16px; border-radius: 50%; background: white; position: absolute; top: 2px; transition: left 0.2s; }
+  .toggle-track.on .toggle-thumb { left: 18px; }
+  .toggle-track.off .toggle-thumb { left: 2px; }
+  .er-line { stroke: #64748b; stroke-width: 1.5; }
+  .er-box { fill: #1e293b; stroke: #334155; stroke-width: 1.5; rx: 6; }
+  .er-box:hover { stroke: #3b82f6; stroke-width: 2; }
+  .er-title { fill: #3b82f6; font-weight: 700; font-size: 13px; }
+  .er-col { fill: #cbd5e1; font-size: 11px; font-family: 'SF Mono', 'Fira Code', monospace; }
+  .er-pk { fill: #f59e0b; }
+  .er-fk { fill: #a78bfa; }
+  .route-row { transition: background 0.15s; }
+  .route-row:hover { background: #334155; }
+  .method-badge { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; font-family: monospace; }
+  .method-GET { background: #16a34a20; color: #4ade80; border: 1px solid #16a34a40; }
+  .method-POST { background: #2563eb20; color: #60a5fa; border: 1px solid #2563eb40; }
+  .method-PUT { background: #d9770620; color: #fbbf24; border: 1px solid #d9770640; }
+  .method-DELETE { background: #dc262620; color: #f87171; border: 1px solid #dc262640; }
+  .table-chip { font-size: 10px; padding: 1px 6px; border-radius: 3px; font-family: monospace; display: inline-block; margin: 1px; }
+  .chip-read { background: #1e3a5f; color: #7dd3fc; }
+  .chip-write { background: #3b1f1f; color: #fca5a5; }
+  .role-chip { font-size: 10px; padding: 1px 6px; border-radius: 3px; display: inline-block; margin: 1px; background: #312e81; color: #a5b4fc; }
+  .bug-badge { font-size: 10px; padding: 1px 6px; border-radius: 3px; background: #7f1d1d; color: #fca5a5; font-weight: 600; }
+  .fixed-badge { font-size: 10px; padding: 1px 6px; border-radius: 3px; background: #14532d; color: #86efac; font-weight: 600; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+  .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+  .scrollbar-thin::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .fade-in { animation: fadeIn 0.25s ease-out; }
+</style>
+</head>
+<body class="min-h-screen">
+
+<!-- Header -->
+<header class="border-b border-surface-700 px-6 py-4">
+  <div class="max-w-[1400px] mx-auto flex items-center justify-between">
+    <div>
+      <h1 class="text-lg font-bold text-surface-200">Employee Management System</h1>
+      <p class="text-xs text-surface-300 mt-0.5">Architecture & Permissions Dashboard</p>
+    </div>
+    <div class="flex items-center gap-3 text-xs text-surface-300">
+      <span>7 Tables</span>
+      <span class="text-surface-700">|</span>
+      <span>24 Endpoints</span>
+      <span class="text-surface-700">|</span>
+      <span>5 Roles</span>
+    </div>
+  </div>
+</header>
+
+<!-- Tabs -->
+<nav class="border-b border-surface-700 px-6">
+  <div class="max-w-[1400px] mx-auto flex gap-0">
+    <button class="tab-btn active px-5 py-3 text-sm font-medium" onclick="showTab('permissions')">Permission Matrix</button>
+    <button class="tab-btn px-5 py-3 text-sm font-medium" onclick="showTab('er')">Table Relationships</button>
+    <button class="tab-btn px-5 py-3 text-sm font-medium" onclick="showTab('routes')">API Route Map</button>
+  </div>
+</nav>
+
+<!-- Tab Content -->
+<main class="max-w-[1400px] mx-auto p-6">
+
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <!-- TAB 1: PERMISSION MATRIX                                               -->
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <div id="tab-permissions" class="fade-in">
+    <div class="flex items-center justify-between mb-4">
+      <div>
+        <h2 class="text-base font-bold text-surface-200">CRUD Permission Matrix</h2>
+        <p class="text-xs text-surface-300 mt-1">Toggle switches to design which roles can Create, Read, Update, or Delete each resource.</p>
+      </div>
+      <div class="flex gap-4 text-xs">
+        <span class="flex items-center gap-1.5"><span class="legend-dot" style="background:#22c55e"></span> Granted</span>
+        <span class="flex items-center gap-1.5"><span class="legend-dot" style="background:#475569"></span> Denied</span>
+      </div>
+    </div>
+
+    <div id="perm-container"></div>
+
+    <!-- Summary counts -->
+    <div class="mt-4 card p-4">
+      <h3 class="text-sm font-semibold text-surface-200 mb-2">Summary</h3>
+      <div id="perm-summary" class="text-xs text-surface-300 flex flex-wrap gap-6"></div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <!-- TAB 2: ER DIAGRAM                                                      -->
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <div id="tab-er" class="hidden fade-in">
+    <div class="flex items-center justify-between mb-4">
+      <div>
+        <h2 class="text-base font-bold text-surface-200">Entity Relationship Diagram</h2>
+        <p class="text-xs text-surface-300 mt-1">All 7 tables, their columns, data types, and relationships. Bug indicators show disconnected tables.</p>
+      </div>
+      <div class="flex gap-4 text-xs">
+        <span class="flex items-center gap-1.5"><span class="legend-dot" style="background:#f59e0b"></span> Primary Key</span>
+        <span class="flex items-center gap-1.5"><span class="legend-dot" style="background:#a78bfa"></span> Foreign Key</span>
+        <span class="flex items-center gap-1.5"><span class="legend-dot" style="background:#ef4444"></span> Bug / Missing Link</span>
+        <span class="flex items-center gap-1.5"><span class="legend-dot" style="background:#22c55e"></span> Correct Link</span>
+      </div>
+    </div>
+    <div class="card p-2 overflow-auto scrollbar-thin" style="min-height: 620px;">
+      <svg id="er-svg" viewBox="0 0 1200 600" class="w-full" style="min-width:1000px;"></svg>
+    </div>
+
+    <!-- Bug List -->
+    <div class="mt-4 card p-4">
+      <h3 class="text-sm font-semibold text-red-400 mb-2">Relationship Bugs Found</h3>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-surface-300" id="er-bugs"></div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <!-- TAB 3: API ROUTE MAP                                                    -->
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <div id="tab-routes" class="hidden fade-in">
+    <div class="flex items-center justify-between mb-4">
+      <div>
+        <h2 class="text-base font-bold text-surface-200">API Route Map</h2>
+        <p class="text-xs text-surface-300 mt-1">Every endpoint, which tables it reads/writes, allowed roles, and known bugs.</p>
+      </div>
+      <div class="flex gap-3 text-xs">
+        <span class="method-badge method-GET">GET</span>
+        <span class="method-badge method-POST">POST</span>
+        <span class="method-badge method-PUT">PUT</span>
+        <span class="method-badge method-DELETE">DELETE</span>
+      </div>
+    </div>
+
+    <!-- Filter bar -->
+    <div class="card p-3 mb-3 flex flex-wrap gap-2 items-center">
+      <span class="text-xs text-surface-300 mr-2">Filter:</span>
+      <button class="filter-btn text-xs px-3 py-1 rounded border border-surface-700 hover:border-accent-500 text-surface-300" onclick="filterRoutes('all')" data-filter="all">All</button>
+      <button class="filter-btn text-xs px-3 py-1 rounded border border-surface-700 hover:border-accent-500 text-surface-300" onclick="filterRoutes('employees')" data-filter="employees">Employees</button>
+      <button class="filter-btn text-xs px-3 py-1 rounded border border-surface-700 hover:border-accent-500 text-surface-300" onclick="filterRoutes('projects')" data-filter="projects">Projects</button>
+      <button class="filter-btn text-xs px-3 py-1 rounded border border-surface-700 hover:border-accent-500 text-surface-300" onclick="filterRoutes('auth')" data-filter="auth">Auth</button>
+      <button class="filter-btn text-xs px-3 py-1 rounded border border-surface-700 hover:border-accent-500 text-surface-300" onclick="filterRoutes('departments')" data-filter="departments">Departments</button>
+      <button class="filter-btn text-xs px-3 py-1 rounded border border-surface-700 hover:border-accent-500 text-surface-300" onclick="filterRoutes('roles')" data-filter="roles">Roles</button>
+      <span class="text-surface-700 mx-1">|</span>
+      <button class="filter-btn text-xs px-3 py-1 rounded border border-red-900 hover:border-red-500 text-red-400" onclick="filterRoutes('bugs')" data-filter="bugs">Bugs Only</button>
+    </div>
+
+    <div class="card overflow-hidden">
+      <table class="w-full text-xs">
+        <thead>
+          <tr class="border-b border-surface-700 text-surface-300 text-left">
+            <th class="px-3 py-2 w-16">Method</th>
+            <th class="px-3 py-2">Endpoint</th>
+            <th class="px-3 py-2">File:Line</th>
+            <th class="px-3 py-2">Tables Read</th>
+            <th class="px-3 py-2">Tables Written</th>
+            <th class="px-3 py-2">Allowed Roles</th>
+            <th class="px-3 py-2 w-16">Status</th>
+          </tr>
+        </thead>
+        <tbody id="routes-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</main>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+// DATA
+// ═══════════════════════════════════════════════════════════════════════════
+
+const ROLES = ["HR_ADMIN", "IT_ADMIN", "DEPT_HEAD", "MANAGER", "EMPLOYEE"];
+const RESOURCES = ["employees", "projects", "accounts", "departments", "roles"];
+const ACTIONS = ["create", "read", "update", "delete"];
+
+// Default permissions — the "ideal" state from our discussion
+const defaultPerms = {
+  HR_ADMIN:  { employees: [1,1,1,1], projects: [1,1,1,1], accounts: [1,1,1,1], departments: [1,1,1,1], roles: [1,1,1,1] },
+  IT_ADMIN:  { employees: [1,1,1,1], projects: [1,1,1,1], accounts: [1,1,1,1], departments: [1,1,1,1], roles: [1,1,1,1] },
+  DEPT_HEAD: { employees: [0,1,0,0], projects: [0,1,0,0], accounts: [0,0,0,0], departments: [0,1,0,0], roles: [0,1,0,0] },
+  MANAGER:   { employees: [0,1,0,0], projects: [0,1,0,0], accounts: [0,0,0,0], departments: [0,1,0,0], roles: [0,1,0,0] },
+  EMPLOYEE:  { employees: [0,1,0,0], projects: [0,1,0,0], accounts: [0,0,0,0], departments: [0,1,0,0], roles: [0,1,0,0] },
+};
+
+// Deep clone for toggling
+let perms = JSON.parse(JSON.stringify(defaultPerms));
+
+const ROUTES_DATA = [
+  // Employees
+  { method:"POST",   path:"/createemployee",                          file:"employees.py:38",   group:"employees", reads:["Employee","Department*"], writes:["Employee"],                    roles:["HR_ADMIN","IT_ADMIN"],  bug:"Dept not validated against departments table" },
+  { method:"GET",    path:"/employees",                               file:"employees.py:96",   group:"employees", reads:["Employee"],               writes:[],                              roles:["ANY"],                 bug:null },
+  { method:"GET",    path:"/employees/{employee_id}",                 file:"employees.py:125",  group:"employees", reads:["Employee","EmployeeSkill"], writes:[],                             roles:["ANY"],                 bug:null },
+  { method:"PUT",    path:"/employees/{id}/assign-department/{dept}", file:"employees.py:157",  group:"employees", reads:["Employee","Department*"], writes:["Employee"],                    roles:["HR_ADMIN","IT_ADMIN"],  bug:"Dept not validated against departments table" },
+  { method:"GET",    path:"/employees/department/{dept}",             file:"employees.py:199",  group:"employees", reads:["Employee"],               writes:[],                              roles:["ANY"],                 bug:null },
+  { method:"PUT",    path:"/employees/{id}/update-role",              file:"employees.py:228",  group:"employees", reads:["Employee","Account","Role"], writes:["Employee","Account"],        roles:["HR_ADMIN","IT_ADMIN"],  bug:null },
+  { method:"PUT",    path:"/employees/{id}/manager",                  file:"employees.py:283",  group:"employees", reads:["Employee x2"],            writes:["Employee"],                    roles:["HR_ADMIN","IT_ADMIN"],  bug:null },
+  { method:"PUT",    path:"/employees/{id}/remove-manager",           file:"employees.py:597",  group:"employees", reads:["Employee"],               writes:["Employee"],                    roles:["HR_ADMIN","IT_ADMIN"],  bug:null },
+  { method:"GET",    path:"/employees/{manager_id}/reportees",        file:"employees.py:332",  group:"employees", reads:["Employee x2"],            writes:[],                              roles:["ANY"],                 bug:null },
+  { method:"PUT",    path:"/employees/{id}/skills",                   file:"employees.py:374",  group:"employees", reads:["Employee","EmployeeSkill"], writes:["EmployeeSkill"],              roles:["HR_ADMIN","IT_ADMIN"],  bug:null },
+  { method:"DELETE", path:"/employees/{id}/skills/{name}",            file:"employees.py:431",  group:"employees", reads:["Employee","EmployeeSkill"], writes:["EmployeeSkill"],              roles:["HR_ADMIN","IT_ADMIN"],  bug:null },
+  { method:"GET",    path:"/employees/department/{d}/skill/{s}",      file:"employees.py:474",  group:"employees", reads:["Employee","EmployeeSkill"], writes:[],                             roles:["ANY"],                 bug:null },
+  { method:"PUT",    path:"/employees/{id}/update-name",              file:"employees.py:555",  group:"employees", reads:["Employee"],               writes:["Employee"],                    roles:["HR_ADMIN","IT_ADMIN"],  bug:null },
+  { method:"DELETE", path:"/employees/{employee_id}",                 file:"employees.py:516",  group:"employees", reads:["Employee"],               writes:["Employee","Account","EmployeeSkill","ProjectMember"], roles:["HR_ADMIN","IT_ADMIN"], bug:"Reportees' manager_id not cleaned up — causes IntegrityError" },
+  // Projects
+  { method:"POST",   path:"/projects",                                file:"projects.py:36",    group:"projects",  reads:["Project"],                writes:["Project"],                     roles:["HR_ADMIN","IT_ADMIN"],  bug:null },
+  { method:"PUT",    path:"/projects/{id}/assign/{emp_id}",           file:"projects.py:79",    group:"projects",  reads:["Project","Employee","ProjectMember"], writes:["ProjectMember"],    roles:["HR_ADMIN","IT_ADMIN"],  bug:null },
+  { method:"DELETE", path:"/projects/{id}/remove/{emp_id}",           file:"projects.py:138",   group:"projects",  reads:["ProjectMember"],          writes:["ProjectMember"],               roles:["HR_ADMIN","IT_ADMIN"],  bug:null },
+  { method:"GET",    path:"/projects/{id}/members",                   file:"projects.py:180",   group:"projects",  reads:["Project","Employee","ProjectMember"], writes:[],                  roles:["ANY"],                 bug:null },
+  { method:"GET",    path:"/projects",                                file:"projects.py:228",   group:"projects",  reads:["Project","ProjectMember"], writes:[],                             roles:["ANY"],                 bug:null },
+  { method:"DELETE", path:"/projects/{id}",                           file:"projects.py:254",   group:"projects",  reads:["Project"],                writes:["Project","ProjectMember"],      roles:["HR_ADMIN","IT_ADMIN"],  bug:null },
+  // Auth
+  { method:"POST",   path:"/auth/create-account/{emp_id}",           file:"auth_routes.py:31", group:"auth",      reads:["Employee","Account","Role"], writes:["Account","Employee"],        roles:["HR_ADMIN","IT_ADMIN"],  bug:null },
+  { method:"POST",   path:"/auth/login",                             file:"auth_routes.py:125", group:"auth",     reads:["Account"],                writes:[],                              roles:["OPEN"],                bug:null },
+  { method:"PUT",    path:"/auth/deactivate/{account_id}",           file:"auth_routes.py:171", group:"auth",     reads:["Account"],                writes:["Account"],                     roles:["HR_ADMIN","IT_ADMIN"],  bug:null },
+  { method:"GET",    path:"/auth/accounts",                          file:"auth_routes.py:207", group:"auth",     reads:["Account"],                writes:[],                              roles:["HR_ADMIN","IT_ADMIN"],  bug:null },
+  { method:"PUT",    path:"/auth/reactivate/{account_id}",           file:"auth_routes.py:239", group:"auth",     reads:["Account"],                writes:["Account"],                     roles:["HR_ADMIN","IT_ADMIN"],  bug:null },
+  // Departments
+  { method:"POST",   path:"/departments",                            file:"departments.py:24",  group:"departments", reads:["Department"],            writes:["Department"],                  roles:["HR_ADMIN","IT_ADMIN"],  bug:null },
+  { method:"GET",    path:"/departments",                            file:"departments.py:62",  group:"departments", reads:["Department"],            writes:[],                              roles:["ANY"],                 bug:null },
+  { method:"DELETE", path:"/departments/{id}",                       file:"departments.py:83",  group:"departments", reads:["Department"],            writes:["Department"],                  roles:["HR_ADMIN","IT_ADMIN"],  bug:"No check if employees still use this department" },
+  // Roles
+  { method:"POST",   path:"/roles",                                  file:"roles.py:27",        group:"roles",     reads:["Role"],                   writes:["Role"],                        roles:["HR_ADMIN","IT_ADMIN"],  bug:null },
+  { method:"GET",    path:"/roles",                                  file:"roles.py:67",        group:"roles",     reads:["Role"],                   writes:[],                              roles:["ANY"],                 bug:null },
+  { method:"DELETE", path:"/roles/{id}",                             file:"roles.py:92",        group:"roles",     reads:["Role"],                   writes:["Role"],                        roles:["HR_ADMIN","IT_ADMIN"],  bug:"No check if employees/accounts still use this role" },
+];
+
+const ER_BUGS = [
+  { id: 1, text: "Employee.department is a plain String — NOT a ForeignKey to departments table. Tables are disconnected.", severity: "HIGH" },
+  { id: 2, text: "Employee.role is a plain String — NOT a ForeignKey to roles table. Validated in Python only.", severity: "HIGH" },
+  { id: 3, text: "Account.role is a plain String — NOT a ForeignKey to roles table. Same issue.", severity: "HIGH" },
+  { id: 4, text: "Department table has ZERO relationships. Completely orphaned.", severity: "HIGH" },
+  { id: 5, text: "Role table has ZERO relationships. Completely orphaned.", severity: "HIGH" },
+  { id: 6, text: "No cascade deletes on Employee → skills, account, project_memberships (manually handled in route code).", severity: "MEDIUM" },
+  { id: 7, text: "No UniqueConstraint on ProjectMember(project_id, employee_id). Race conditions can create duplicates.", severity: "MEDIUM" },
+  { id: 8, text: "DELETE /employees doesn't nullify reportees' manager_id before deleting — causes IntegrityError crash.", severity: "CRASH" },
+];
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TAB SWITCHING
+// ═══════════════════════════════════════════════════════════════════════════
+function showTab(name) {
+  document.querySelectorAll('[id^="tab-"]').forEach(el => el.classList.add('hidden'));
+  document.getElementById('tab-' + name).classList.remove('hidden');
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+  event.target.classList.add('active');
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TAB 1: PERMISSION MATRIX
+// ═══════════════════════════════════════════════════════════════════════════
+function renderPermissions() {
+  const container = document.getElementById('perm-container');
+  let html = '';
+
+  RESOURCES.forEach(resource => {
+    html += `<div class="card mb-3 overflow-hidden">`;
+    html += `<div class="px-4 py-2 border-b border-surface-700 flex items-center justify-between">`;
+    html += `<span class="text-sm font-semibold text-accent-500 uppercase tracking-wide">${resource}</span>`;
+    html += `<span class="text-[10px] text-surface-300">Resource</span>`;
+    html += `</div>`;
+    html += `<table class="w-full text-xs"><thead><tr class="border-b border-surface-700 text-surface-300">`;
+    html += `<th class="px-4 py-2 text-left w-32">Role</th>`;
+    ACTIONS.forEach(a => {
+      const color = a === 'create' ? 'text-blue-400' : a === 'read' ? 'text-green-400' : a === 'update' ? 'text-amber-400' : 'text-red-400';
+      html += `<th class="px-4 py-2 text-center ${color}">${a.charAt(0).toUpperCase() + a.slice(1)}</th>`;
+    });
+    html += `</tr></thead><tbody>`;
+
+    ROLES.forEach(role => {
+      html += `<tr class="border-b border-surface-700/50">`;
+      const isAdmin = role === 'HR_ADMIN' || role === 'IT_ADMIN';
+      html += `<td class="px-4 py-2 font-mono ${isAdmin ? 'text-amber-400' : 'text-surface-200'}">${role}</td>`;
+      ACTIONS.forEach((action, ai) => {
+        const val = perms[role][resource][ai];
+        const id = `${role}-${resource}-${ai}`;
+        html += `<td class="px-4 py-2 text-center">`;
+        html += `<div class="toggle-track ${val ? 'on' : 'off'} inline-block" onclick="togglePerm('${role}','${resource}',${ai})" id="toggle-${id}">`;
+        html += `<div class="toggle-thumb"></div>`;
+        html += `</div>`;
+        html += `</td>`;
+      });
+      html += `</tr>`;
+    });
+
+    html += `</tbody></table></div>`;
+  });
+
+  container.innerHTML = html;
+  updateSummary();
+}
+
+function togglePerm(role, resource, actionIdx) {
+  perms[role][resource][actionIdx] = perms[role][resource][actionIdx] ? 0 : 1;
+  const id = `toggle-${role}-${resource}-${actionIdx}`;
+  const el = document.getElementById(id);
+  if (perms[role][resource][actionIdx]) {
+    el.classList.remove('off'); el.classList.add('on');
+  } else {
+    el.classList.remove('on'); el.classList.add('off');
+  }
+  updateSummary();
+}
+
+function updateSummary() {
+  const summaryEl = document.getElementById('perm-summary');
+  let html = '';
+  ROLES.forEach(role => {
+    let granted = 0, total = 0;
+    RESOURCES.forEach(res => {
+      ACTIONS.forEach((_, ai) => {
+        total++;
+        if (perms[role][res][ai]) granted++;
+      });
+    });
+    const pct = Math.round(granted / total * 100);
+    const color = pct === 100 ? 'text-green-400' : pct === 0 ? 'text-red-400' : 'text-amber-400';
+    html += `<span class="flex items-center gap-1"><span class="font-mono text-surface-200">${role}:</span><span class="${color} font-semibold">${granted}/${total} (${pct}%)</span></span>`;
+  });
+  summaryEl.innerHTML = html;
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TAB 2: ER DIAGRAM
+// ═══════════════════════════════════════════════════════════════════════════
+function renderER() {
+  const svg = document.getElementById('er-svg');
+
+  const tables = [
+    { name: 'Employee', x: 70, y: 30, w: 210, cols: [
+      { n: 'id', t: 'Integer', k: 'PK' },
+      { n: 'emp_id', t: 'String (unique)', k: '' },
+      { n: 'name', t: 'String', k: '' },
+      { n: 'department', t: 'String ⚠', k: 'BUG' },
+      { n: 'role', t: 'String ⚠', k: 'BUG' },
+      { n: 'manager_id', t: 'Integer', k: 'FK→self' },
+    ]},
+    { name: 'EmployeeSkill', x: 400, y: 30, w: 190, cols: [
+      { n: 'id', t: 'Integer', k: 'PK' },
+      { n: 'employee_id', t: 'Integer', k: 'FK' },
+      { n: 'skill', t: 'String', k: '' },
+    ]},
+    { name: 'Account', x: 400, y: 220, w: 200, cols: [
+      { n: 'id', t: 'Integer', k: 'PK' },
+      { n: 'username', t: 'String (unique)', k: '' },
+      { n: 'password_hash', t: 'String', k: '' },
+      { n: 'employee_id', t: 'Integer (null)', k: 'FK' },
+      { n: 'role', t: 'String ⚠', k: 'BUG' },
+      { n: 'is_active', t: 'Boolean', k: '' },
+    ]},
+    { name: 'Department', x: 70, y: 360, w: 180, cols: [
+      { n: 'id', t: 'Integer', k: 'PK' },
+      { n: 'name', t: 'String (unique)', k: '' },
+    ]},
+    { name: 'Role', x: 700, y: 340, w: 180, cols: [
+      { n: 'id', t: 'Integer', k: 'PK' },
+      { n: 'name', t: 'String (unique)', k: '' },
+      { n: 'is_system_role', t: 'Boolean', k: '' },
+    ]},
+    { name: 'Project', x: 700, y: 30, w: 180, cols: [
+      { n: 'id', t: 'Integer', k: 'PK' },
+      { n: 'name', t: 'String (unique)', k: '' },
+    ]},
+    { name: 'ProjectMember', x: 700, y: 170, w: 190, cols: [
+      { n: 'id', t: 'Integer', k: 'PK' },
+      { n: 'project_id', t: 'Integer', k: 'FK' },
+      { n: 'employee_id', t: 'Integer', k: 'FK' },
+    ]},
+  ];
+
+  // Relationships
+  const rels = [
+    // Correct FKs (green)
+    { from: 'EmployeeSkill', fromSide: 'left', to: 'Employee', toSide: 'right', color: '#22c55e', label: 'employee_id → employees.id', fy: 70, ty: 70 },
+    { from: 'Account', fromSide: 'left', to: 'Employee', toSide: 'right', color: '#22c55e', label: 'employee_id → employees.id', fy: 290, ty: 200 },
+    { from: 'ProjectMember', fromSide: 'left', to: 'Employee', toSide: 'right', color: '#22c55e', label: 'employee_id → employees.id', fy: 230, ty: 150 },
+    { from: 'ProjectMember', fromSide: 'top', to: 'Project', toSide: 'bottom', color: '#22c55e', label: 'project_id → projects.id', fy: 170, ty: 110 },
+    // Self-ref
+    { from: 'Employee', fromSide: 'left-self', to: 'Employee', toSide: 'left-self', color: '#22c55e', label: 'manager_id → self', fy: 150, ty: 50 },
+    // Missing FKs (red dashed)
+    { from: 'Employee', fromSide: 'bottom', to: 'Department', toSide: 'top', color: '#ef4444', label: 'MISSING FK: department → departments', fy: 250, ty: 360, dashed: true },
+    { from: 'Employee', fromSide: 'right-mid', to: 'Role', toSide: 'left', color: '#ef4444', label: 'MISSING FK: role → roles', fy: 140, ty: 380, dashed: true },
+    { from: 'Account', fromSide: 'right', to: 'Role', toSide: 'left', color: '#ef4444', label: 'MISSING FK: role → roles', fy: 310, ty: 400, dashed: true },
+  ];
+
+  let svgContent = '';
+
+  // Draw relationship lines first (behind boxes)
+  rels.forEach(rel => {
+    const fromT = tables.find(t => t.name === rel.from);
+    const toT = tables.find(t => t.name === rel.to);
+    let x1, y1, x2, y2;
+
+    if (rel.fromSide === 'left-self') {
+      // Self-referencing arrow
+      const bx = fromT.x - 10;
+      const by1 = fromT.y + 150;
+      const by2 = fromT.y + 50;
+      svgContent += `<path d="M ${fromT.x} ${by1} C ${bx - 30} ${by1}, ${bx - 30} ${by2}, ${fromT.x} ${by2}" fill="none" stroke="${rel.color}" stroke-width="1.5" marker-end="url(#arrow-green)"/>`;
+      svgContent += `<text x="${bx - 38}" y="${(by1+by2)/2}" fill="${rel.color}" font-size="9" text-anchor="end" transform="rotate(-90, ${bx-38}, ${(by1+by2)/2})">${rel.label}</text>`;
+      return;
+    }
+
+    if (rel.fromSide === 'left') { x1 = fromT.x; y1 = rel.fy; }
+    else if (rel.fromSide === 'right') { x1 = fromT.x + fromT.w; y1 = rel.fy; }
+    else if (rel.fromSide === 'right-mid') { x1 = fromT.x + fromT.w; y1 = rel.fy; }
+    else if (rel.fromSide === 'top') { x1 = fromT.x + fromT.w / 2; y1 = fromT.y; }
+    else if (rel.fromSide === 'bottom') { x1 = fromT.x + fromT.w / 2; y1 = rel.fy; }
+
+    if (rel.toSide === 'right') { x2 = toT.x + toT.w; y2 = rel.ty; }
+    else if (rel.toSide === 'left') { x2 = toT.x; y2 = rel.ty; }
+    else if (rel.toSide === 'top') { x2 = toT.x + toT.w / 2; y2 = toT.y; }
+    else if (rel.toSide === 'bottom') { x2 = toT.x + toT.w / 2; y2 = rel.ty; }
+
+    const dash = rel.dashed ? 'stroke-dasharray="6 4"' : '';
+    const mid = rel.fromSide === 'bottom' || rel.fromSide === 'top'
+      ? `M ${x1} ${y1} C ${x1} ${(y1+y2)/2}, ${x2} ${(y1+y2)/2}, ${x2} ${y2}`
+      : `M ${x1} ${y1} C ${(x1+x2)/2} ${y1}, ${(x1+x2)/2} ${y2}, ${x2} ${y2}`;
+    const arrowId = rel.dashed ? 'arrow-red' : 'arrow-green';
+
+    svgContent += `<path d="${mid}" fill="none" stroke="${rel.color}" stroke-width="1.5" ${dash} marker-end="url(#${arrowId})"/>`;
+
+    // Label
+    const lx = (x1 + x2) / 2;
+    const ly = (y1 + y2) / 2 - 6;
+    if (rel.dashed) {
+      svgContent += `<text x="${lx}" y="${ly}" fill="${rel.color}" font-size="8" text-anchor="middle" font-weight="600">${rel.label}</text>`;
+    }
+  });
+
+  // Draw table boxes
+  tables.forEach(t => {
+    const h = 28 + t.cols.length * 18;
+    svgContent += `<rect class="er-box" x="${t.x}" y="${t.y}" width="${t.w}" height="${h}"/>`;
+    svgContent += `<rect x="${t.x}" y="${t.y}" width="${t.w}" height="24" rx="6" fill="#1e3a5f" stroke="none"/>`;
+    svgContent += `<rect x="${t.x}" y="${t.y + 12}" width="${t.w}" height="12" fill="#1e3a5f" stroke="none"/>`;
+    svgContent += `<text class="er-title" x="${t.x + 10}" y="${t.y + 17}">${t.name}</text>`;
+
+    // orphan warning
+    if (t.name === 'Department' || t.name === 'Role') {
+      svgContent += `<text x="${t.x + t.w - 8}" y="${t.y + 17}" fill="#ef4444" font-size="11" text-anchor="end" font-weight="700">⚠ ORPHANED</text>`;
+    }
+
+    t.cols.forEach((col, ci) => {
+      const cy = t.y + 40 + ci * 18;
+      let klass = 'er-col';
+      let prefix = '';
+      if (col.k === 'PK') { klass = 'er-pk'; prefix = '🔑 '; }
+      else if (col.k.startsWith('FK')) { klass = 'er-fk'; prefix = '🔗 '; }
+      else if (col.k === 'BUG') { klass = 'er-col'; prefix = '⚠ '; }
+
+      let text = `${prefix}${col.n}`;
+      svgContent += `<text class="${klass}" x="${t.x + 10}" y="${cy}">${text}</text>`;
+      svgContent += `<text class="er-col" x="${t.x + t.w - 8}" y="${cy}" text-anchor="end" fill="#64748b" font-size="9">${col.t}</text>`;
+    });
+  });
+
+  // Arrow markers
+  const defs = `<defs>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#22c55e"/></marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444"/></marker>
+  </defs>`;
+
+  svg.innerHTML = defs + svgContent;
+
+  // Bug list
+  const bugsEl = document.getElementById('er-bugs');
+  bugsEl.innerHTML = ER_BUGS.map(b => {
+    const sev = b.severity === 'CRASH' ? 'bg-red-900 text-red-200' : b.severity === 'HIGH' ? 'bg-red-900/50 text-red-300' : 'bg-amber-900/50 text-amber-300';
+    return `<div class="flex items-start gap-2 p-2 rounded ${sev}">
+      <span class="font-mono font-bold text-[10px] mt-0.5">#${b.id}</span>
+      <span>${b.text}</span>
+      <span class="ml-auto text-[10px] font-bold whitespace-nowrap">${b.severity}</span>
+    </div>`;
+  }).join('');
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TAB 3: API ROUTE MAP
+// ═══════════════════════════════════════════════════════════════════════════
+let currentFilter = 'all';
+
+function renderRoutes() {
+  const tbody = document.getElementById('routes-tbody');
+  const filtered = currentFilter === 'all' ? ROUTES_DATA
+    : currentFilter === 'bugs' ? ROUTES_DATA.filter(r => r.bug)
+    : ROUTES_DATA.filter(r => r.group === currentFilter);
+
+  tbody.innerHTML = filtered.map(r => {
+    const methodClass = `method-${r.method}`;
+    const reads = r.reads.map(t => {
+      const isBug = t.endsWith('*');
+      const name = isBug ? t.slice(0, -1) : t;
+      return `<span class="table-chip ${isBug ? 'chip-write' : 'chip-read'}">${name}${isBug ? ' ⚠' : ''}</span>`;
+    }).join('');
+    const writes = r.writes.map(t => `<span class="table-chip chip-write">${t}</span>`).join('') || '<span class="text-surface-700">—</span>';
+    const roles = r.roles.map(rl => {
+      if (rl === 'ANY') return '<span class="role-chip" style="background:#14532d;color:#86efac">ANY</span>';
+      if (rl === 'OPEN') return '<span class="role-chip" style="background:#14532d;color:#86efac">NO AUTH</span>';
+      return `<span class="role-chip">${rl}</span>`;
+    }).join('');
+    const status = r.bug
+      ? `<span class="bug-badge" title="${r.bug}">BUG</span>`
+      : `<span class="fixed-badge">OK</span>`;
+
+    return `<tr class="route-row border-b border-surface-700/50">
+      <td class="px-3 py-2"><span class="method-badge ${methodClass}">${r.method}</span></td>
+      <td class="px-3 py-2 font-mono text-surface-200">${r.path}</td>
+      <td class="px-3 py-2 text-surface-300">${r.file}</td>
+      <td class="px-3 py-2">${reads}</td>
+      <td class="px-3 py-2">${writes}</td>
+      <td class="px-3 py-2">${roles}</td>
+      <td class="px-3 py-2">${status}</td>
+    </tr>
+    ${r.bug ? `<tr class="border-b border-surface-700/50 bg-red-900/10"><td></td><td colspan="6" class="px-3 py-1 text-[10px] text-red-400">⚠ ${r.bug}</td></tr>` : ''}`;
+  }).join('');
+
+  // Highlight active filter button
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    if (btn.dataset.filter === currentFilter) {
+      btn.style.borderColor = '#3b82f6';
+      btn.style.color = '#60a5fa';
+    } else {
+      btn.style.borderColor = '';
+      btn.style.color = '';
+    }
+  });
+}
+
+function filterRoutes(filter) {
+  currentFilter = filter;
+  renderRoutes();
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════════════════════
+renderPermissions();
+renderER();
+renderRoutes();
+</script>
+</body>
+</html>

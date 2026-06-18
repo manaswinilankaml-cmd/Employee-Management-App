@@ -22,7 +22,11 @@ from database import get_db
 
 # Read the secret key from the .env file
 load_dotenv()
-SECRET_KEY = os.getenv("SECRET_KEY", "my-super-secret-key-change-in-production")
+SECRET_KEY = os.getenv("SECRET_KEY")
+
+if not SECRET_KEY:
+    # Fail fast if security configuration is missing
+    raise RuntimeError("SECRET_KEY not found in environment variables. Check your .env file.")
 
 # Tell FastAPI to expect a "Bearer <token>" header in requests
 security = HTTPBearer()

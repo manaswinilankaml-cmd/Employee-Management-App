@@ -68,46 +68,35 @@ def add_employee(
         )
 
     # --- Create the employee ---
-    # Retry once if two requests create the same emp_id at the same time
-    for attempt in range(2):
-        try:
-            # Find the last employee to calculate the next ID number
-            last_employee_in_db = db.query(Employee).order_by(Employee.id.desc()).first()
+    try:
+        # Step 1: Create the employee row without emp_id first
+        new_employee = Employee(
+            name=name.strip(),
+            department=department.strip(),
+            role="EMPLOYEE"
+        )
 
-            if last_employee_in_db:
-                next_id_number = last_employee_in_db.id + 1
-            else:
-                next_id_number = 1
+        db.add(new_employee)
+        # Step 2: Flush to assign the auto-incremented primary key 'id'
+        db.flush()
 
-            # Build the new employee row
-            new_employee = Employee(
-                emp_id=generate_employee_id("IM", 2026, next_id_number + attempt),
-                name=name.strip(),
-                department=department.strip(),
-                role="EMPLOYEE"
-            )
+        # Step 3: Use the guaranteed unique 'id' to generate the business 'emp_id'
+        new_employee.emp_id = generate_employee_id("IM", 2026, new_employee.id)
 
-            # Save to employees TABLE
-            db.add(new_employee)
-            db.commit()
-            db.refresh(new_employee)
+        db.commit()
+        db.refresh(new_employee)
 
-            return {
-                "message": "Employee created successfully!",
-                "id": new_employee.id,
-                "emp_id": new_employee.emp_id,
-                "name": new_employee.name,
-                "department": new_employee.department
-            }
+        return {
+            "message": "Employee created successfully!",
+            "id": new_employee.id,
+            "emp_id": new_employee.emp_id,
+            "name": new_employee.name,
+            "department": new_employee.department
+        }
 
-        except IntegrityError:
-            db.rollback()
-            if attempt == 1:
-                raise HTTPException(status_code=500, detail="Could not generate unique employee ID. Please try again.")
-
-        except SQLAlchemyError as error:
-            db.rollback()
-            raise HTTPException(status_code=500, detail=f"Database error: {str(error)}")
+    except SQLAlchemyError as error:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(error)}")
 
 
 # ==============================================================================
@@ -395,6 +384,18 @@ def update_role(
         if not employee_from_db:
             raise HTTPException(status_code=404, detail="Employee not found.")
 
+        # --- Privilege Escalation Check ---
+        system_admin_roles = ["HR_ADMIN", "IT_ADMIN"]
+        callers_role = user["role"]
+
+        # If the new role is an admin role, OR if the employee is currently an admin,
+        # then the caller MUST be an admin.
+        if (new_role in system_admin_roles or employee_from_db.role in system_admin_roles) and callers_role not in system_admin_roles:
+            raise HTTPException(
+                status_code=403,
+                detail="You do not have permission to assign or modify administrative roles."
+            )
+
         # Update role in employees TABLE
         employee_from_db.role = new_role
 
@@ -427,7 +428,7 @@ def update_role(
 @router.put("/employees/{employee_id}/manager")
 def assign_manager(
     employee_id: str,
-    manager_id: int,
+    manager_emp_id: str,
     db: Session = Depends(get_db),
     user=Depends(require_permission("employees", "update"))
 ):
@@ -440,16 +441,34 @@ def assign_manager(
             raise HTTPException(status_code=404, detail="Employee not found.")
 
         # Find the manager in employees TABLE
-        manager_from_db = db.query(Employee).filter(Employee.id == manager_id).first()
+        manager_from_db = db.query(Employee).filter(Employee.emp_id == manager_emp_id).first()
         if not manager_from_db:
             raise HTTPException(status_code=404, detail="Manager not found.")
 
         # Can't be your own manager
-        if employee_from_db.id == manager_id:
+        if employee_from_db.emp_id == manager_emp_id:
             raise HTTPException(status_code=400, detail="An employee cannot be their own manager.")
 
+        # --- Circular Management Check ---
+        # Ensure that the manager does not report to this employee (directly or indirectly)
+        # This prevents a loop in the reporting structure.
+        check_ptr = manager_from_db
+        visited_ids = {employee_from_db.id}
+        
+        while check_ptr is not None:
+            if check_ptr.id in visited_ids:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Circular management detected: {manager_from_db.name} already reports to {employee_from_db.name} (directly or indirectly)."
+                )
+            # Move up the chain
+            if check_ptr.manager_id:
+                check_ptr = db.query(Employee).filter(Employee.id == check_ptr.manager_id).first()
+            else:
+                break
+
         # Update manager_id in employees TABLE
-        employee_from_db.manager_id = manager_id
+        employee_from_db.manager_id = manager_from_db.id
         db.commit()
         db.refresh(employee_from_db)
 
@@ -471,9 +490,9 @@ def assign_manager(
 # FROM: employees TABLE (filtered by manager_id)
 # TO:   API response
 # ==============================================================================
-@router.get("/employees/{manager_id}/reportees")
+@router.get("/employees/{manager_emp_id}/reportees")
 def get_reportees(
-    manager_id: int,
+    manager_emp_id: str,
     db: Session = Depends(get_db),
     user=Depends(require_permission("employees", "read"))
 ):
@@ -485,7 +504,7 @@ def get_reportees(
     """
     try:
         # Find the manager in employees TABLE
-        manager_from_db = db.query(Employee).filter(Employee.id == manager_id).first()
+        manager_from_db = db.query(Employee).filter(Employee.emp_id == manager_emp_id).first()
         if not manager_from_db:
             raise HTTPException(status_code=404, detail="Manager not found.")
 
@@ -499,7 +518,7 @@ def get_reportees(
                 raise HTTPException(status_code=403, detail="No employee profile linked to your account.")
 
             if callers_role == "MANAGER":
-                if manager_id != caller_employee.id:
+                if manager_from_db.id != caller_employee.id:
                     raise HTTPException(status_code=403, detail="You can only view your own reportees.")
 
             elif callers_role == "DEPT_HEAD":
@@ -510,7 +529,7 @@ def get_reportees(
                 raise HTTPException(status_code=403, detail="Employees cannot view reportee lists.")
 
         # Get all employees WHERE manager_id = this manager, from employees TABLE
-        reportee_list = db.query(Employee).filter(Employee.manager_id == manager_id).all()
+        reportee_list = db.query(Employee).filter(Employee.manager_id == manager_from_db.id).all()
 
         if not reportee_list:
             raise HTTPException(status_code=404, detail="No reportees found for this manager.")
@@ -540,7 +559,7 @@ def get_reportees(
 # ==============================================================================
 @router.put("/employees/{employee_id}/skills")
 def update_skills(
-    employee_id: int,
+    employee_id: str,
     skills: list[str],
     db: Session = Depends(get_db),
     user=Depends(require_permission("employees", "update"))
@@ -552,7 +571,7 @@ def update_skills(
 
     try:
         # Find the employee in employees TABLE
-        employee_from_db = db.query(Employee).filter(Employee.id == employee_id).first()
+        employee_from_db = db.query(Employee).filter(Employee.emp_id == employee_id).first()
         if not employee_from_db:
             raise HTTPException(status_code=404, detail="Employee not found.")
 
@@ -597,7 +616,7 @@ def update_skills(
 # ==============================================================================
 @router.delete("/employees/{employee_id}/skills/{skill_name}")
 def remove_skill(
-    employee_id: int,
+    employee_id: str,
     skill_name: str,
     db: Session = Depends(get_db),
     user=Depends(require_permission("employees", "update"))
@@ -606,13 +625,13 @@ def remove_skill(
 
     try:
         # Find the employee in employees TABLE
-        employee_from_db = db.query(Employee).filter(Employee.id == employee_id).first()
+        employee_from_db = db.query(Employee).filter(Employee.emp_id == employee_id).first()
         if not employee_from_db:
             raise HTTPException(status_code=404, detail="Employee not found.")
 
         # Find this specific skill in the employee_skills TABLE
         skill_row = db.query(EmployeeSkill).filter(
-            EmployeeSkill.employee_id == employee_id,
+            EmployeeSkill.employee_id == employee_from_db.id,
             EmployeeSkill.skill == skill_name
         ).first()
 
@@ -724,11 +743,9 @@ def delete_employee(
 
         employee_name = employee_from_db.name
 
-        # Step 1: In employees TABLE, set manager_id = None for anyone who reported to this person
-        db.query(Employee).filter(Employee.manager_id == employee_from_db.id).update({"manager_id": None})
-
-        # Step 2: Delete the employee from employees TABLE
-        # (cascade automatically deletes from: accounts, employee_skills, project_members)
+        # Delete the employee from employees TABLE
+        # DB CASCADE automatically handles: accounts, employee_skills, project_members
+        # DB SET NULL automatically handles: reportees' manager_id
         db.delete(employee_from_db)
         db.commit()
 

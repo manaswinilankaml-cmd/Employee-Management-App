@@ -10,13 +10,14 @@ Password and username are sent in the REQUEST BODY (not in the URL).
 """
 
 from fastapi import APIRouter, HTTPException, Depends, Body
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
 from database import get_db
 from db_models import Account, Employee, Role
 from auth import require_permission, create_token
-from utils import hash_password
+from utils import hash_password, verify_password
 
 router = APIRouter()
 
@@ -76,7 +77,7 @@ def create_account(
             raise HTTPException(status_code=400, detail="This employee already has an account.")
 
         # Step 3: Check if username is already taken in accounts TABLE
-        username_taken = db.query(Account).filter(Account.username == username.strip()).first()
+        username_taken = db.query(Account).filter(func.lower(Account.username) == username.strip().lower()).first()
         if username_taken:
             raise HTTPException(status_code=400, detail="Username already exists. Pick another one.")
 
@@ -132,15 +133,13 @@ def login(
 
     try:
         # Step 1: Find the account by username in accounts TABLE
-        account_from_db = db.query(Account).filter(Account.username == username.strip()).first()
+        account_from_db = db.query(Account).filter(func.lower(Account.username) == username.strip().lower()).first()
 
         # Step 2: Check if account exists and password matches
-        scrambled_input_password = hash_password(password)
-
         if not account_from_db:
             raise HTTPException(status_code=401, detail="Invalid username or password.")
 
-        if account_from_db.password_hash != scrambled_input_password:
+        if not verify_password(password, account_from_db.password_hash):
             raise HTTPException(status_code=401, detail="Invalid username or password.")
 
         # Step 3: Check if account is active

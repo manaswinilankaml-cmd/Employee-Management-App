@@ -126,3 +126,51 @@ def delete_department(
     except SQLAlchemyError as error:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Database error: {str(error)}")
+
+
+# ==============================================================================
+# ROUTE 4: Update a department name
+# FROM: departments TABLE (find department)
+# TO:   departments TABLE (update name)
+# ==============================================================================
+@router.put("/departments/{department_id}")
+def update_department(
+    department_id: int,
+    new_name: str,
+    db: Session = Depends(get_db),
+    user=Depends(require_permission("departments", "update"))
+):
+    """
+    Updates a department's name.
+    CASCADE: Automatically updates all employees in this department.
+    """
+
+    if not new_name or not new_name.strip():
+        raise HTTPException(status_code=400, detail="Department name cannot be empty.")
+
+    try:
+        # Find the department in departments TABLE
+        department_from_db = db.query(Department).filter(Department.id == department_id).first()
+        if not department_from_db:
+            raise HTTPException(status_code=404, detail="Department not found.")
+
+        # Check if the new name is already taken
+        if db.query(Department).filter(Department.name == new_name.strip()).first():
+            raise HTTPException(status_code=400, detail="This department name is already taken.")
+
+        # Update the name
+        department_from_db.name = new_name.strip()
+        db.commit()
+        db.refresh(department_from_db)
+
+        return {
+            "message": "Department updated successfully!",
+            "id": department_from_db.id,
+            "name": department_from_db.name
+        }
+
+    except HTTPException:
+        raise
+    except SQLAlchemyError as error:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(error)}")

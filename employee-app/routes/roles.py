@@ -162,3 +162,57 @@ def delete_role(
     except SQLAlchemyError as error:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Database error: {str(error)}")
+
+
+# ==============================================================================
+# ROUTE 4: Update a role name
+# FROM: roles TABLE (find role)
+# TO:   roles TABLE (update name)
+# ==============================================================================
+@router.put("/roles/{role_id}")
+def update_role_name(
+    role_id: int,
+    new_name: str,
+    db: Session = Depends(get_db),
+    user=Depends(require_permission("roles", "update"))
+):
+    """
+    Updates a role's name.
+    CASCADE: Automatically updates all employees, accounts, and permissions using this role.
+    """
+
+    if not new_name or not new_name.strip():
+        raise HTTPException(status_code=400, detail="Role name cannot be empty.")
+
+    new_role_name = new_name.strip().upper()
+
+    try:
+        # Find the role in roles TABLE
+        role_from_db = db.query(Role).filter(Role.id == role_id).first()
+        if not role_from_db:
+            raise HTTPException(status_code=404, detail="Role not found.")
+
+        # System roles cannot be renamed
+        if role_from_db.is_system_role:
+            raise HTTPException(status_code=403, detail=f"Cannot rename system role '{role_from_db.name}'.")
+
+        # Check if the new name is already taken
+        if db.query(Role).filter(Role.name == new_role_name).first():
+            raise HTTPException(status_code=400, detail="This role name is already taken.")
+
+        # Update the name
+        role_from_db.name = new_role_name
+        db.commit()
+        db.refresh(role_from_db)
+
+        return {
+            "message": "Role updated successfully!",
+            "id": role_from_db.id,
+            "name": role_from_db.name
+        }
+
+    except HTTPException:
+        raise
+    except SQLAlchemyError as error:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(error)}")

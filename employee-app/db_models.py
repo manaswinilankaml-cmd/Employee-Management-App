@@ -31,13 +31,13 @@ class Employee(Base):
     name = Column(String, nullable=False)
 
     # Which department they belong to (e.g., "Engineering", "HR")
-    department = Column(String, nullable=False)
+    department = Column(String, ForeignKey("departments.name", onupdate="CASCADE"), nullable=False)
 
     # Their role in the system (e.g., "MANAGER", "EMPLOYEE")
-    role = Column(String, nullable=True)
+    role = Column(String, ForeignKey("roles.name", onupdate="CASCADE"), nullable=True)
 
     # Who is their manager? Points to another employee's id.
-    manager_id = Column(Integer, ForeignKey("employees.id"), nullable=True)
+    manager_id = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
 
     # ─── Relationships (shortcuts for easier queries, NOT actual columns) ─────
     # "manager" lets us do: employee.manager → returns the manager Employee object
@@ -67,7 +67,7 @@ class EmployeeSkill(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
 
     # Which employee has this skill?
-    employee_id = Column(Integer, ForeignKey("employees.id"), nullable=False)
+    employee_id = Column(Integer, ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
 
     # The skill name (e.g., "Python", "SQL", "Leadership")
     skill = Column(String, nullable=False)
@@ -93,10 +93,10 @@ class Account(Base):
     password_hash = Column(String, nullable=False)
 
     # Which employee does this account belong to? (NULL for standalone admins)
-    employee_id = Column(Integer, ForeignKey("employees.id"), nullable=True)
+    employee_id = Column(Integer, ForeignKey("employees.id", ondelete="CASCADE"), nullable=True)
 
     # What role does this account have? (HR_ADMIN, IT_ADMIN, EMPLOYEE, MANAGER, DEPT_HEAD)
-    role = Column(String, nullable=False)
+    role = Column(String, ForeignKey("roles.name", onupdate="CASCADE"), nullable=False)
 
     # Is this account active? (False = locked out)
     is_active = Column(Boolean, default=True)
@@ -165,10 +165,10 @@ class ProjectMember(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
 
     # Which project?
-    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
 
     # Which employee?
-    employee_id = Column(Integer, ForeignKey("employees.id"), nullable=False)
+    employee_id = Column(Integer, ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
 
     # Relationships for easy navigation
     project = relationship("Project", back_populates="members")
@@ -191,7 +191,7 @@ class RolePermission(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
 
     # Which role does this permission apply to? (e.g., "MANAGER", "EMPLOYEE")
-    role_name = Column(String, nullable=False)
+    role_name = Column(String, ForeignKey("roles.name", onupdate="CASCADE"), nullable=False)
 
     # Which resource does this permission apply to? (e.g., "employees", "projects")
     resource = Column(String, nullable=False)

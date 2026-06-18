@@ -15,7 +15,7 @@ After running, you can login with:
 """
 
 from database import SessionLocal, engine, Base
-from db_models import Account, Role, RolePermission
+from db_models import Account, Role, RolePermission, Department
 from utils import hash_password
 
 
@@ -45,7 +45,8 @@ def seed_admin_accounts():
             db.add(hr_admin)
             print("✓ HR_ADMIN account created (username: hradmin)")
         else:
-            print("- HR_ADMIN account already exists, skipping.")
+            existing_hr.password_hash = hash_password("Pass@123")
+            print("✓ HR_ADMIN password updated to bcrypt")
 
         # ─── Admin 2: IT_ADMIN ────────────────────────────────────────────────
         existing_it = db.query(Account).filter(Account.username == "itadmin").first()
@@ -60,7 +61,8 @@ def seed_admin_accounts():
             db.add(it_admin)
             print("✓ IT_ADMIN account created (username: itadmin)")
         else:
-            print("- IT_ADMIN account already exists, skipping.")
+            existing_it.password_hash = hash_password("Pass@123")
+            print("✓ IT_ADMIN password updated to bcrypt")
 
         db.commit()
         print("\nDone! Admin accounts are ready in the database.")
@@ -86,6 +88,22 @@ def seed_admin_accounts():
 
         db.commit()
         print("\nDone! Default roles are ready in the database.")
+
+        # ─── Seed Default Departments ────────────────────────────────────────
+        print("\nSeeding default departments...")
+        default_departments = ["Engineering", "HR", "Sales", "Marketing", "IT"]
+
+        for dept_name in default_departments:
+            existing_dept = db.query(Department).filter(Department.name == dept_name).first()
+            if not existing_dept:
+                new_dept = Department(name=dept_name)
+                db.add(new_dept)
+                print(f"  ✓ Department '{dept_name}' created")
+            else:
+                print(f"  - Department '{dept_name}' already exists, skipping.")
+
+        db.commit()
+        print("\nDone! Default departments are ready in the database.")
 
         # ─── Seed Default Permissions ────────────────────────────────────────
         # Format: [can_create, can_read, can_update, can_delete]

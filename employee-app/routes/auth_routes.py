@@ -16,7 +16,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from database import get_db
 from db_models import Account, Employee, Role
-from auth import require_permission, create_token
+from auth import require_permission, create_token, get_current_user, SECRET_KEY
 from utils import hash_password, verify_password
 
 router = APIRouter()
@@ -149,10 +149,18 @@ def login(
         # Step 4: Create a token and return it
         token = create_token(account_from_db.id, account_from_db.role)
 
+        # Get readable emp_id if employee profile is linked
+        emp_id = None
+        if account_from_db.employee:
+            emp_id = account_from_db.employee.emp_id
+
         return {
             "message": "Login successful!",
             "token": token,
-            "role": account_from_db.role
+            "role": account_from_db.role,
+            "employee_id": account_from_db.employee_id,
+            "emp_id": emp_id,
+            "username": account_from_db.username
         }
 
     except HTTPException:
@@ -257,6 +265,139 @@ def reactivate_account(
 
         return {"message": f"Account '{account_from_db.username}' has been reactivated."}
 
+    except HTTPException:
+        raise
+    except SQLAlchemyError as error:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(error)}")
+
+
+# ==============================================================================
+# ROUTE 6: Change own password (authenticated user)
+# FROM: current_password, new_password
+# TO:   accounts TABLE (update password_hash)
+# ==============================================================================
+@router.post("/auth/change-password")
+def change_password(
+    current_password: str = Body(),
+    new_password: str = Body(),
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user)
+):
+    """Allows any logged-in user to change their own password."""
+    if not current_password or not new_password:
+        raise HTTPException(status_code=400, detail="Current password and new password are required.")
+    
+    if len(new_password) < 6:
+        raise HTTPException(status_code=400, detail="New password must be at least 6 characters.")
+        
+    try:
+        account_id = user["account_id"]
+        account_from_db = db.query(Account).filter(Account.id == account_id).first()
+        
+        if not account_from_db:
+            raise HTTPException(status_code=404, detail="Account not found.")
+            
+        if not verify_password(current_password, account_from_db.password_hash):
+            raise HTTPException(status_code=400, detail="Incorrect current password.")
+            
+        account_from_db.password_hash = hash_password(new_password)
+        db.commit()
+        
+        return {"message": "Password changed successfully."}
+        
+    except HTTPException:
+        raise
+    except SQLAlchemyError as error:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(error)}")
+
+
+# ==============================================================================
+# ROUTE 7: Admin resets a user's password (authenticated admin)
+# FROM: new_password
+# TO:   accounts TABLE (update password_hash)
+# ==============================================================================
+@router.put("/auth/admin-reset-password/{account_id}")
+def admin_reset_password(
+    account_id: int,
+    new_password: str = Body(embed=True),
+    db: Session = Depends(get_db),
+    user=Depends(require_permission("accounts", "update"))
+):
+    """Allows an administrator (with update accounts permission) to reset any user's password."""
+    if not new_password or len(new_password) < 6:
+        raise HTTPException(status_code=400, detail="New password must be at least 6 characters.")
+        
+    try:
+        account_from_db = db.query(Account).filter(Account.id == account_id).first()
+        if not account_from_db:
+            raise HTTPException(status_code=404, detail="Account not found.")
+            
+        account_from_db.password_hash = hash_password(new_password)
+        db.commit()
+        
+        return {"message": f"Password for user '{account_from_db.username}' has been reset successfully."}
+        
+    except HTTPException:
+        raise
+    except SQLAlchemyError as error:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(error)}")
+
+
+# ==============================================================================
+# ROUTE 8: Forgot password (unauthenticated flow)
+# FROM: username, emp_id (or admin_secret for standalone accounts), new_password
+# TO:   accounts TABLE (update password_hash)
+# ==============================================================================
+@router.post("/auth/forgot-password")
+def forgot_password(
+    username: str = Body(),
+    emp_id: str = Body(default=None),
+    admin_secret: str = Body(default=None),
+    new_password: str = Body(),
+    db: Session = Depends(get_db)
+):
+    """Allows resetting a password if credentials can be verified without logging in."""
+    if not username or not new_password:
+        raise HTTPException(status_code=400, detail="Username and new password are required.")
+        
+    if len(new_password) < 6:
+        raise HTTPException(status_code=400, detail="New password must be at least 6 characters.")
+        
+    try:
+        # Find the account by username (case-insensitive)
+        account_from_db = db.query(Account).filter(func.lower(Account.username) == username.strip().lower()).first()
+        if not account_from_db:
+            raise HTTPException(status_code=404, detail="Username not found.")
+            
+        if not account_from_db.is_active:
+            raise HTTPException(status_code=403, detail="Account is deactivated. Cannot reset password.")
+            
+        # If it is a standalone admin account (no employee linked)
+        if account_from_db.employee_id is None:
+            # Requires admin secret from env
+            if not admin_secret or admin_secret != SECRET_KEY:
+                raise HTTPException(
+                    status_code=400, 
+                    detail="For standalone admin accounts, a valid Admin Security Key is required to reset password."
+                )
+        else:
+            # For standard employees, verify their Employee ID
+            if not emp_id or not emp_id.strip():
+                raise HTTPException(status_code=400, detail="Employee ID is required to verify your identity.")
+                
+            employee = account_from_db.employee
+            if not employee or employee.emp_id.strip().lower() != emp_id.strip().lower():
+                raise HTTPException(status_code=400, detail="Identity verification failed. Employee ID does not match.")
+                
+        # If verification passes, update password
+        account_from_db.password_hash = hash_password(new_password)
+        db.commit()
+        
+        return {"message": "Password reset successfully. You can now login with your new password."}
+        
     except HTTPException:
         raise
     except SQLAlchemyError as error:

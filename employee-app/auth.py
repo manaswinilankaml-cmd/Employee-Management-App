@@ -53,7 +53,7 @@ def create_token(account_id: int, role: str) -> str:
 def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
     """
     Opens someone's sealed ID card (token) and reads what's inside.
-    Returns: {"account_id": 1, "role": "HR_ADMIN"}
+    Returns dynamic details from the database so changes are reflected immediately.
     If the card is expired or fake, we reject them.
     Checks the database to make sure the account is active.
     """
@@ -72,7 +72,13 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
                 detail="Account is deactivated or does not exist. Please contact admin."
             )
             
-        return info_inside_token
+        return {
+            "account_id": account_from_db.id,
+            "role": account_from_db.role,
+            "employee_id": account_from_db.employee_id,
+            "emp_id": account_from_db.employee.emp_id if account_from_db.employee else None,
+            "username": account_from_db.username
+        }
 
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token has expired. Please login again.")

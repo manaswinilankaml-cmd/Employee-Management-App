@@ -26,9 +26,9 @@ from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from sqlalchemy import or_
 
 from database import get_db
-from db_models import Employee, EmployeeSkill, Account, ProjectMember, Role, Department
+from db_models import Employee, EmployeeSkill, Account, ProjectMember, Role, Department, RolePermission
 from utils import generate_employee_id
-from auth import require_permission, get_caller_employee
+from auth import require_permission, get_caller_employee, get_current_user
 
 router = APIRouter()
 
@@ -562,12 +562,31 @@ def update_skills(
     employee_id: str,
     skills: list[str],
     db: Session = Depends(get_db),
-    user=Depends(require_permission("employees", "update"))
+    user=Depends(get_current_user)
 ):
     """Adds new skills. Skips skills the employee already has."""
 
     if not skills:
         raise HTTPException(status_code=400, detail="Skills list cannot be empty.")
+
+    # Check permission: allowed if role has "employees" update permission, OR caller is updating their own profile
+    callers_role = user["role"]
+    is_allowed = False
+    
+    permission_row = db.query(RolePermission).filter(
+        RolePermission.role_name == callers_role,
+        RolePermission.resource == "employees"
+    ).first()
+    if permission_row and permission_row.can_update:
+        is_allowed = True
+
+    if not is_allowed:
+        caller_employee = get_caller_employee(user, db)
+        if not caller_employee or caller_employee.emp_id != employee_id:
+            raise HTTPException(
+                status_code=403, 
+                detail="Access denied. You can only update skills on your own profile."
+            )
 
     try:
         # Find the employee in employees TABLE
@@ -619,9 +638,28 @@ def remove_skill(
     employee_id: str,
     skill_name: str,
     db: Session = Depends(get_db),
-    user=Depends(require_permission("employees", "update"))
+    user=Depends(get_current_user)
 ):
     """Removes one skill from an employee."""
+
+    # Check permission: allowed if role has "employees" update permission, OR caller is updating their own profile
+    callers_role = user["role"]
+    is_allowed = False
+    
+    permission_row = db.query(RolePermission).filter(
+        RolePermission.role_name == callers_role,
+        RolePermission.resource == "employees"
+    ).first()
+    if permission_row and permission_row.can_update:
+        is_allowed = True
+
+    if not is_allowed:
+        caller_employee = get_caller_employee(user, db)
+        if not caller_employee or caller_employee.emp_id != employee_id:
+            raise HTTPException(
+                status_code=403, 
+                detail="Access denied. You can only delete skills from your own profile."
+            )
 
     try:
         # Find the employee in employees TABLE

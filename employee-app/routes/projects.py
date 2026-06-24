@@ -173,7 +173,7 @@ def get_project_members(
         # --- Scope check: EMPLOYEE can only view their own projects ---
         callers_role = user["role"]
 
-        if callers_role not in ["HR_ADMIN", "IT_ADMIN", "DEPT_HEAD", "MANAGER"]:
+        if callers_role not in ["HR_ADMIN", "IT_ADMIN", "DEPT_HEAD", "DEPARTMENT HEAD", "DEPARTMENT_HEAD", "MANAGER"]:
             caller_employee = get_caller_employee(user, db)
             if not caller_employee:
                 raise HTTPException(status_code=403, detail="No employee profile linked to your account.")
@@ -234,7 +234,7 @@ def get_all_projects(
     callers_role = user["role"]
 
     try:
-        if callers_role in ["HR_ADMIN", "IT_ADMIN", "DEPT_HEAD", "MANAGER"]:
+        if callers_role in ["HR_ADMIN", "IT_ADMIN", "DEPT_HEAD", "DEPARTMENT HEAD", "DEPARTMENT_HEAD", "MANAGER"]:
             # See all projects from projects TABLE
             project_list = db.query(Project).all()
         else:

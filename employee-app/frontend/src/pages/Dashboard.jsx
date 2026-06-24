@@ -76,7 +76,7 @@ export default function Dashboard() {
 
         // 6. Infer permissions based on user role
         const isAdmin = user.role === 'HR_ADMIN' || user.role === 'IT_ADMIN';
-        const isDeptHead = user.role === 'DEPT_HEAD';
+        const isDeptHead = ['DEPT_HEAD', 'DEPARTMENT HEAD', 'DEPARTMENT_HEAD'].includes(user.role);
         
         setPermissions({
           canCreateEmployee: isAdmin, // only admin can create employee by default
@@ -108,7 +108,7 @@ export default function Dashboard() {
 
   const isAdmin = user?.role === 'HR_ADMIN' || user?.role === 'IT_ADMIN';
   const isManager = user?.role === 'MANAGER';
-  const isDeptHead = user?.role === 'DEPT_HEAD';
+  const isDeptHead = ['DEPT_HEAD', 'DEPARTMENT HEAD', 'DEPARTMENT_HEAD'].includes(user?.role);
 
   return (
     <div className="flex-1 p-8 max-w-[1800px] w-full mx-auto">

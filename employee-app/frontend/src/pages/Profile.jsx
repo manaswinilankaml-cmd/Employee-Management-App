@@ -12,6 +12,7 @@ export default function Profile() {
   const [departments, setDepartments] = useState([]);
   const [allEmployees, setAllEmployees] = useState([]);
   const [reportees, setReportees] = useState([]);
+  const [rolesList, setRolesList] = useState([]);
   
   // Account Status state (Admin-only)
   const [account, setAccount] = useState(null);
@@ -21,7 +22,6 @@ export default function Profile() {
   // Create Account form state
   const [newUsername, setNewUsername] = useState('');
   const [newPassword, setNewPassword] = useState('');
-  const [newAccountRole, setNewAccountRole] = useState('EMPLOYEE');
   const [accountError, setAccountError] = useState('');
   const [isCreatingAccount, setIsCreatingAccount] = useState(false);
 
@@ -49,6 +49,7 @@ export default function Profile() {
   const isEmployeeRole = user?.role === 'EMPLOYEE';
   const isOwnProfile = employee?.id === user?.employeeId;
   const isProfileAdmin = employee?.role === 'HR_ADMIN' || employee?.role === 'IT_ADMIN' || account?.role === 'HR_ADMIN' || account?.role === 'IT_ADMIN';
+  const canManageReportingLine = user?.role === 'HR_ADMIN' || user?.role === 'IT_ADMIN' || ['DEPT_HEAD', 'DEPARTMENT HEAD', 'DEPARTMENT_HEAD'].includes(user?.role);
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
@@ -102,6 +103,9 @@ export default function Profile() {
 
       const empsRes = await fetch('/employees', { headers });
       if (empsRes.ok) setAllEmployees(await empsRes.json());
+
+      const rolesRes = await fetch('/roles', { headers });
+      if (rolesRes.ok) setRolesList(await rolesRes.json());
     } catch (err) {
       console.error('Error fetching lookup data:', err);
     }
@@ -279,7 +283,7 @@ export default function Profile() {
         body: JSON.stringify({
           username: newUsername.trim(),
           password: newPassword.trim(),
-          role: newAccountRole,
+          role: role,
         }),
       });
 
@@ -491,24 +495,64 @@ export default function Profile() {
               </div>
 
               {isAdmin && (
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-bold text-on-surface-variant px-0.5">System Role</label>
-                  <select
-                    value={role}
-                    onChange={(e) => setRole(e.target.value)}
-                    className="w-full h-12 bg-white/50 border border-outline-variant/30 rounded-xl px-4 text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none cursor-pointer"
-                  >
-                    <option value="EMPLOYEE">EMPLOYEE</option>
-                    <option value="MANAGER">MANAGER</option>
-                    <option value="DEPT_HEAD">DEPT_HEAD</option>
-                  </select>
-                </div>
+                <>
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-bold text-on-surface-variant px-0.5">System Role</label>
+                    <select
+                      value={rolesList.filter(r => r.is_system_role).some(r => r.name === role) ? role : ""}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val) {
+                          setRole(val);
+                        } else {
+                          setRole("");
+                        }
+                      }}
+                      className="w-full h-12 bg-white/50 border border-outline-variant/30 rounded-xl px-4 text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none cursor-pointer"
+                    >
+                      <option value="">Select System Role...</option>
+                      {rolesList
+                        .filter((r) => r.is_system_role)
+                        .map((r) => (
+                          <option key={r.id} value={r.name}>
+                            {r.name}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-bold text-on-surface-variant px-0.5">Custom Role</label>
+                    <select
+                      value={rolesList.filter(r => !r.is_system_role).some(r => r.name === role) ? role : ""}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val) {
+                          setRole(val);
+                        } else {
+                          setRole("");
+                        }
+                      }}
+                      className="w-full h-12 bg-white/50 border border-outline-variant/30 rounded-xl px-4 text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none cursor-pointer"
+                    >
+                      <option value="">Select Custom Role...</option>
+                      {rolesList
+                        .filter((r) => !r.is_system_role)
+                        .map((r) => (
+                          <option key={r.id} value={r.name}>
+                            {r.name}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                </>
               )}
             </form>
           </div>
 
           {/* Reporting Hierarchy Panel */}
-          <div className="glass-card p-8 rounded-3xl shadow-sm">
+          {canManageReportingLine && (
+            <div className="glass-card p-8 rounded-3xl shadow-sm">
             <h3 className="text-lg font-bold text-on-surface mb-2">Reporting Line Management</h3>
             <p className="text-xs text-on-surface-variant mb-6">Manage managers and direct report mappings</p>
             
@@ -554,7 +598,7 @@ export default function Profile() {
                     <tr className="border-b border-outline-variant/10">
                       <th className="pb-3 text-xs font-bold text-outline px-1">Direct Report</th>
                       <th className="pb-3 text-xs font-bold text-outline">Department</th>
-                      <th className="pb-3 text-xs font-bold text-outline">System Role</th>
+                      <th className="pb-3 text-xs font-bold text-outline">Role</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-outline-variant/10">
@@ -581,6 +625,7 @@ export default function Profile() {
               </p>
             )}
           </div>
+          )}
         </section>
 
         {/* Right Column (Account & Skills) */}
@@ -606,7 +651,7 @@ export default function Profile() {
                   </div>
 
                   <div className="flex justify-between items-center py-2.5 border-b border-outline-variant/10 text-xs">
-                    <span className="text-on-surface-variant font-medium">System Role</span>
+                    <span className="text-on-surface-variant font-medium">Role</span>
                     <span className="font-bold text-primary">{account.role}</span>
                   </div>
 
@@ -724,18 +769,6 @@ export default function Profile() {
                     />
                   </div>
 
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-outline uppercase block ml-0.5">Account Role</label>
-                    <select
-                      value={newAccountRole}
-                      onChange={(e) => setNewAccountRole(e.target.value)}
-                      className="w-full bg-white/50 border border-outline-variant/20 rounded-xl py-2 px-2 text-xs cursor-pointer outline-none focus:ring-2 focus:ring-primary"
-                    >
-                      <option value="EMPLOYEE">EMPLOYEE</option>
-                      <option value="MANAGER">MANAGER</option>
-                      <option value="DEPT_HEAD">DEPT_HEAD</option>
-                    </select>
-                  </div>
 
                   <button
                     type="submit"

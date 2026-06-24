@@ -121,7 +121,7 @@ def get_all_employees(
     try:
         # --- ADMIN: see everyone ---
         if callers_role in ["HR_ADMIN", "IT_ADMIN"]:
-            employee_list = db.query(Employee).all()
+            employee_list = db.query(Employee).order_by(Employee.emp_id.desc()).all()
 
         # --- NON-ADMIN: see limited data ---
         else:
@@ -130,7 +130,7 @@ def get_all_employees(
             if not caller_employee:
                 raise HTTPException(status_code=403, detail="No employee profile linked to your account.")
 
-            if callers_role == "DEPT_HEAD":
+            if callers_role in ["DEPT_HEAD", "DEPARTMENT HEAD", "DEPARTMENT_HEAD"]:
                 # Get all employees WHERE department = my department
                 my_department = caller_employee.department
                 employee_list = db.query(Employee).filter(Employee.department == my_department).all()
@@ -197,7 +197,7 @@ def get_one_employee(
                 raise HTTPException(status_code=403, detail="No employee profile linked to your account.")
 
             # DEPT_HEAD: can only see employees in their department
-            if callers_role == "DEPT_HEAD":
+            if callers_role in ["DEPT_HEAD", "DEPARTMENT HEAD", "DEPARTMENT_HEAD"]:
                 if employee_from_db.department != caller_employee.department:
                     raise HTTPException(status_code=403, detail="You can only view employees in your department.")
 
@@ -312,7 +312,7 @@ def get_employees_by_department(
                 raise HTTPException(status_code=403, detail="No employee profile linked to your account.")
 
             # DEPT_HEAD can only query their OWN department
-            if callers_role == "DEPT_HEAD":
+            if callers_role in ["DEPT_HEAD", "DEPARTMENT HEAD", "DEPARTMENT_HEAD"]:
                 if department != caller_employee.department:
                     raise HTTPException(status_code=403, detail="You can only view your own department.")
 
@@ -320,7 +320,7 @@ def get_employees_by_department(
         employees_in_this_department = db.query(Employee).filter(Employee.department == department).all()
 
         # MANAGER and EMPLOYEE: further filter the results
-        if callers_role not in ["HR_ADMIN", "IT_ADMIN", "DEPT_HEAD"]:
+        if callers_role not in ["HR_ADMIN", "IT_ADMIN", "DEPT_HEAD", "DEPARTMENT HEAD", "DEPARTMENT_HEAD"]:
             caller_employee = get_caller_employee(user, db)
 
             if callers_role == "MANAGER":
@@ -430,9 +430,13 @@ def assign_manager(
     employee_id: str,
     manager_emp_id: str,
     db: Session = Depends(get_db),
-    user=Depends(require_permission("employees", "update"))
+    user=Depends(get_current_user)
 ):
     """Sets who manages a given employee."""
+
+    callers_role = user["role"]
+    if callers_role not in ["HR_ADMIN", "IT_ADMIN", "DEPT_HEAD", "DEPARTMENT HEAD", "DEPARTMENT_HEAD"]:
+        raise HTTPException(status_code=403, detail="You do not have permission to manage reporting lines.")
 
     try:
         # Find the employee in employees TABLE
@@ -448,6 +452,19 @@ def assign_manager(
         # Can't be your own manager
         if employee_from_db.emp_id == manager_emp_id:
             raise HTTPException(status_code=400, detail="An employee cannot be their own manager.")
+
+        # If the caller is a DEPT_HEAD, they can only manage their own department
+        if callers_role in ["DEPT_HEAD", "DEPARTMENT HEAD", "DEPARTMENT_HEAD"]:
+            caller_employee = get_caller_employee(user, db)
+            if not caller_employee:
+                raise HTTPException(status_code=403, detail="Department Head profile not found.")
+            
+            if employee_from_db.department != caller_employee.department:
+                raise HTTPException(status_code=403, detail="You can only manage employees within your own department.")
+            
+            if manager_from_db.department != caller_employee.department:
+                raise HTTPException(status_code=403, detail="You can only assign managers from your own department.")
+
 
         # --- Circular Management Check ---
         # Ensure that the manager does not report to this employee (directly or indirectly)
@@ -521,7 +538,7 @@ def get_reportees(
                 if manager_from_db.id != caller_employee.id:
                     raise HTTPException(status_code=403, detail="You can only view your own reportees.")
 
-            elif callers_role == "DEPT_HEAD":
+            elif callers_role in ["DEPT_HEAD", "DEPARTMENT HEAD", "DEPARTMENT_HEAD"]:
                 if manager_from_db.department != caller_employee.department:
                     raise HTTPException(status_code=403, detail="You can only view reportees of managers in your department.")
 
@@ -712,7 +729,7 @@ def get_employees_by_skill_and_department(
             if not caller_employee:
                 raise HTTPException(status_code=403, detail="No employee profile linked to your account.")
 
-            if callers_role == "DEPT_HEAD" and department != caller_employee.department:
+            if callers_role in ["DEPT_HEAD", "DEPARTMENT HEAD", "DEPARTMENT_HEAD"] and department != caller_employee.department:
                 raise HTTPException(status_code=403, detail="You can only search within your own department.")
 
         from sqlalchemy import func
@@ -728,7 +745,7 @@ def get_employees_by_skill_and_department(
         )
 
         # MANAGER and EMPLOYEE: further filter
-        if callers_role not in ["HR_ADMIN", "IT_ADMIN", "DEPT_HEAD"]:
+        if callers_role not in ["HR_ADMIN", "IT_ADMIN", "DEPT_HEAD", "DEPARTMENT HEAD", "DEPARTMENT_HEAD"]:
             caller_employee = get_caller_employee(user, db)
             my_id = caller_employee.id
 
@@ -846,15 +863,28 @@ def update_name(
 def remove_manager(
     employee_id: str,
     db: Session = Depends(get_db),
-    user=Depends(require_permission("employees", "update"))
+    user=Depends(get_current_user)
 ):
     """Removes the manager assignment (sets manager to nobody)."""
+
+    callers_role = user["role"]
+    if callers_role not in ["HR_ADMIN", "IT_ADMIN", "DEPT_HEAD", "DEPARTMENT HEAD", "DEPARTMENT_HEAD"]:
+        raise HTTPException(status_code=403, detail="You do not have permission to manage reporting lines.")
 
     try:
         # Find the employee in employees TABLE
         employee_from_db = db.query(Employee).filter(Employee.emp_id == employee_id).first()
         if not employee_from_db:
             raise HTTPException(status_code=404, detail="Employee not found.")
+
+        # If the caller is a DEPT_HEAD, check department boundaries
+        if callers_role in ["DEPT_HEAD", "DEPARTMENT HEAD", "DEPARTMENT_HEAD"]:
+            caller_employee = get_caller_employee(user, db)
+            if not caller_employee:
+                raise HTTPException(status_code=403, detail="Department Head profile not found.")
+            
+            if employee_from_db.department != caller_employee.department:
+                raise HTTPException(status_code=403, detail="You can only manage employees within your own department.")
 
         if employee_from_db.manager_id is None:
             raise HTTPException(status_code=400, detail="This employee has no manager assigned.")

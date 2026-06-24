@@ -74,7 +74,7 @@ export default function Sidebar() {
 
   // Determine visibility of role-based items
   const isAdmin = user.role === 'HR_ADMIN' || user.role === 'IT_ADMIN';
-  const isDeptHead = user.role === 'DEPT_HEAD';
+  const isDeptHead = ['DEPT_HEAD', 'DEPARTMENT HEAD', 'DEPARTMENT_HEAD'].includes(user.role);
   
   // Show Org Management only for admins and department heads
   const showOrgManagement = isAdmin || isDeptHead;

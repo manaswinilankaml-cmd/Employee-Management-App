@@ -345,7 +345,7 @@ export default function Employees() {
                 <th className="px-6 py-5 text-xs font-bold text-outline uppercase tracking-wider">Emp ID</th>
                 <th className="px-6 py-5 text-xs font-bold text-outline uppercase tracking-wider">Name</th>
                 <th className="px-6 py-5 text-xs font-bold text-outline uppercase tracking-wider">Department</th>
-                <th className="px-6 py-5 text-xs font-bold text-outline uppercase tracking-wider">System Role</th>
+                <th className="px-6 py-5 text-xs font-bold text-outline uppercase tracking-wider">Role</th>
                 <th className="px-6 py-5 text-xs font-bold text-outline uppercase tracking-wider">Manager</th>
                 <th className="px-6 py-5 text-xs font-bold text-outline uppercase tracking-wider text-right">Actions</th>
               </tr>

@@ -475,41 +475,6 @@ export default function Organization() {
         </section>
       </div>
 
-      {/* Asymmetric Bottom Status Section */}
-      <section className="glass-card rounded-3xl p-10 relative overflow-hidden">
-        <div className="relative z-10 grid grid-cols-1 md:grid-cols-3 gap-8">
-          <div>
-            <h4 className="text-base font-bold text-on-surface mb-2">Access Control Integrity</h4>
-            <p className="text-xs text-outline leading-relaxed mb-4">
-              98% of role configurations possess valid security policy mappings with zero orphans.
-            </p>
-            <div className="w-full bg-outline-variant/20 rounded-full h-1.5 overflow-hidden">
-              <div className="bg-primary h-full w-[98%]" />
-            </div>
-          </div>
-          <div>
-            <h4 className="text-base font-bold text-on-surface mb-2">Regional Alignment</h4>
-            <p className="text-xs text-outline leading-relaxed mb-4">
-              Structural units are optimized for enterprise scaling and balanced direct reports.
-            </p>
-            <div className="flex gap-2">
-              <div className="flex-1 bg-primary/20 h-6 rounded" />
-              <div className="flex-1 bg-primary/40 h-6 rounded" />
-              <div className="flex-1 bg-primary/60 h-6 rounded" />
-              <div className="flex-1 bg-primary h-6 rounded" />
-            </div>
-          </div>
-          <div className="flex flex-col justify-center items-center text-center p-6 bg-white/30 backdrop-blur-md rounded-2xl border border-white/50">
-            <span className="material-symbols-outlined text-primary text-[36px] mb-2" style={{ fontVariationSettings: "'FILL' 1" }}>
-              auto_awesome
-            </span>
-            <p className="text-xs font-bold text-on-surface uppercase tracking-wide">Security Optimizer</p>
-            <p className="text-[10px] text-outline mt-1 leading-normal">
-              Permissions are synchronized across backend middlewares automatically.
-            </p>
-          </div>
-        </div>
-      </section>
     </div>
   );
 }

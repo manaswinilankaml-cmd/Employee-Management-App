@@ -130,7 +130,25 @@ def get_all_employees(
             if not caller_employee:
                 raise HTTPException(status_code=403, detail="No employee profile linked to your account.")
 
-            if callers_role in ["DEPT_HEAD", "DEPARTMENT HEAD", "DEPARTMENT_HEAD"]:
+            # Check if this caller has supervised departments (e.g. CEO/CTO role scopes)
+            from db_models import DepartmentSupervisor, Department
+            from sqlalchemy import or_
+            supervising_depts = db.query(Department.name).join(DepartmentSupervisor).filter(
+                DepartmentSupervisor.employee_id == caller_employee.id
+            ).all()
+            supervising_dept_names = [d[0] for d in supervising_depts]
+
+            if supervising_dept_names:
+                # Can view all employees in supervised departments + reports + themselves
+                employee_list = db.query(Employee).filter(
+                    or_(
+                        Employee.department.in_(supervising_dept_names),
+                        Employee.manager_id == caller_employee.id,
+                        Employee.id == caller_employee.id
+                    )
+                ).all()
+
+            elif callers_role in ["DEPT_HEAD", "DEPARTMENT HEAD", "DEPARTMENT_HEAD"]:
                 # Get all employees WHERE department = my department
                 my_department = caller_employee.department
                 employee_list = db.query(Employee).filter(Employee.department == my_department).all()
@@ -145,6 +163,7 @@ def get_all_employees(
             else:
                 # EMPLOYEE or any other role: see only myself
                 employee_list = [caller_employee]
+
 
         # --- Build the response ---
         result = []
@@ -196,8 +215,22 @@ def get_one_employee(
             if not caller_employee:
                 raise HTTPException(status_code=403, detail="No employee profile linked to your account.")
 
+            # Check if this caller has supervised departments (e.g. CEO/CTO role scopes)
+            from db_models import DepartmentSupervisor, Department
+            dept_obj = db.query(Department).filter(Department.name == employee_from_db.department).first()
+            is_supervised = False
+            if dept_obj:
+                is_supervised = db.query(DepartmentSupervisor).filter(
+                    DepartmentSupervisor.employee_id == caller_employee.id,
+                    DepartmentSupervisor.department_id == dept_obj.id
+                ).first() is not None
+
+            if is_supervised:
+                # If they supervise this employee's department, allow view
+                pass
+
             # DEPT_HEAD: can only see employees in their department
-            if callers_role in ["DEPT_HEAD", "DEPARTMENT HEAD", "DEPARTMENT_HEAD"]:
+            elif callers_role in ["DEPT_HEAD", "DEPARTMENT HEAD", "DEPARTMENT_HEAD"]:
                 if employee_from_db.department != caller_employee.department:
                     raise HTTPException(status_code=403, detail="You can only view employees in your department.")
 
@@ -212,6 +245,7 @@ def get_one_employee(
             else:
                 if employee_from_db.id != caller_employee.id:
                     raise HTTPException(status_code=403, detail="You can only view your own profile.")
+
 
         # --- Build the response ---
         # Get this employee's skills from the employee_skills TABLE
@@ -461,9 +495,26 @@ def assign_manager(
             
             if employee_from_db.department != caller_employee.department:
                 raise HTTPException(status_code=403, detail="You can only manage employees within your own department.")
-            
-            if manager_from_db.department != caller_employee.department:
-                raise HTTPException(status_code=403, detail="You can only assign managers from your own department.")
+
+        # Check if the proposed manager is in the same department OR has supervision rights over the employee's department
+        is_allowed = (manager_from_db.department == employee_from_db.department)
+        if not is_allowed:
+            from db_models import Department, DepartmentSupervisor
+            dept_obj = db.query(Department).filter(Department.name == employee_from_db.department).first()
+            if dept_obj:
+                supervisor_record = db.query(DepartmentSupervisor).filter(
+                    DepartmentSupervisor.employee_id == manager_from_db.id,
+                    DepartmentSupervisor.department_id == dept_obj.id
+                ).first()
+                if supervisor_record:
+                    is_allowed = True
+                    
+        if not is_allowed:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Proposed manager {manager_from_db.name} is not in {employee_from_db.name}'s department ({employee_from_db.department}) and does not supervise it."
+            )
+
 
 
         # --- Circular Management Check ---
@@ -539,17 +590,38 @@ def get_reportees(
                     raise HTTPException(status_code=403, detail="You can only view your own reportees.")
 
             elif callers_role in ["DEPT_HEAD", "DEPARTMENT HEAD", "DEPARTMENT_HEAD"]:
-                if manager_from_db.department != caller_employee.department:
-                    raise HTTPException(status_code=403, detail="You can only view reportees of managers in your department.")
+                is_allowed = (manager_from_db.department == caller_employee.department)
+                if not is_allowed:
+                    from db_models import Department, DepartmentSupervisor
+                    dept_obj = db.query(Department).filter(Department.name == caller_employee.department).first()
+                    if dept_obj:
+                        supervisor_record = db.query(DepartmentSupervisor).filter(
+                            DepartmentSupervisor.employee_id == manager_from_db.id,
+                            DepartmentSupervisor.department_id == dept_obj.id
+                        ).first()
+                        if supervisor_record:
+                            is_allowed = True
+                
+                if not is_allowed:
+                    raise HTTPException(
+                        status_code=403,
+                        detail="You can only view reportees of managers in your department or supervising your department."
+                    )
 
             else:
                 raise HTTPException(status_code=403, detail="Employees cannot view reportee lists.")
 
+
         # Get all employees WHERE manager_id = this manager, from employees TABLE
         reportee_list = db.query(Employee).filter(Employee.manager_id == manager_from_db.id).all()
 
+        # For DEPT_HEAD, filter out reportees that are not in their department
+        if callers_role in ["DEPT_HEAD", "DEPARTMENT HEAD", "DEPARTMENT_HEAD"]:
+            reportee_list = [emp for emp in reportee_list if emp.department == caller_employee.department]
+
         if not reportee_list:
             raise HTTPException(status_code=404, detail="No reportees found for this manager.")
+
 
         # --- Build the response ---
         result = []

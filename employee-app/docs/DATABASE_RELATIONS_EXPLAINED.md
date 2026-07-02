@@ -16,13 +16,16 @@ OUR PLAYROOM SYSTEM
 │    ├── Labels -> [Employee] (One Job Tag can be worn by many Toy Figures)
 │    └── Key to login -> [Account] (One Job Tag lets many Accounts log in)
 ├── [Department] (Toy Boxes)
-│    └── Groups -> [Employee] (One Toy Box holds many Toy Figures)
+│    ├── Groups -> [Employee] (One Toy Box holds many Toy Figures)
+│    └── Supervised by -> [DepartmentSupervisor] (A Toy Box can have many Supervisors)
 └── [Employee] (Toy Figures)
      ├── Controls -> [Account] (Each Toy has exactly one Remote Control)
      ├── Knows -> [EmployeeSkill] (Each Toy knows a list of special tricks)
      ├── Reports to -> [Employee] (A Toy Leader can have a line of reports behind them)
+     ├── Supervision Scope -> [DepartmentSupervisor] (Assigns which Toy Boxes a Toy supervises)
      └── Plays -> [ProjectMember] (Game Matcher)
           └── Joins to -> [Project] (Playground Games)
+
 ```
 
 ---
@@ -67,7 +70,26 @@ In our playroom, we have three different ways of connecting our toys.
     └── Sign-Up Sheet (ProjectMember) -> Toy: Arnav
     ```
 
+### D. Many-to-One / Many-to-Many (Supervising Toy Boxes)
+*   **The Analogy:** Some toys are **Super-Toys** (like the **CEO** or **CTO**). They do not just live in one single Toy Box. Instead, they are assigned to **Supervise** multiple Toy Boxes (departments).
+*   For example, the **CEO** and **CTO** can both supervise the **Engineering Box**.
+*   This means:
+    *   One department can have **many** different supervisors (e.g. both CEO and CTO supervise Engineering).
+    *   One supervisor can oversee **many** different departments (e.g. CEO supervises Engineering, HR, and Sales).
+*   To keep track of which Super-Toy supervises which Box, we use a **Supervision List** (this is our table: **DepartmentSupervisor**).
+*   When assigning a manager to a Toy Figure:
+    *   We check if the manager lives in the **same** Toy Box. If yes, it is allowed!
+    *   If they live in a different box, we check the **Supervision List**. If the manager is on the supervision list for that box (like the CEO or CTO), it is allowed!
+*   **How the database sees it:**
+    ```text
+    CEO (Employee)
+    ├── Supervision List (DepartmentSupervisor) -> Engineering Box
+    ├── Supervision List (DepartmentSupervisor) -> HR Box
+    └── Supervision List (DepartmentSupervisor) -> Sales Box
+    ```
+
 ---
+
 
 ## 3. The Self-Referential Tree (The Toy Leader Line)
 
@@ -97,3 +119,5 @@ Leader: Anjan (DEPARTMENT HEAD)
 | **Employee to Employee** | Self-Referential One-to-Many | One Leader Toy pulls a line of Report Toys. |
 | **Employee to Project** | Many-to-Many | Many Toy Figures play many Playground Games. |
 | **Employee to Skill** | One-to-Many | One Toy Figure knows a list of tricks. |
+| **Employee to Department (Supervisor)** | Many-to-Many / Many-to-One | One Super-Toy supervises many Toy Boxes; One Toy Box can have many supervisors. |
+

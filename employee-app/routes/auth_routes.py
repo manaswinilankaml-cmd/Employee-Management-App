@@ -321,29 +321,58 @@ def change_password(
 @router.put("/auth/admin-reset-password/{account_id}")
 def admin_reset_password(
     account_id: int,
-    new_password: str = Body(embed=True),
+    new_password: str = Body(default=None),
+    new_username: str = Body(default=None),
     db: Session = Depends(get_db),
     user=Depends(require_permission("accounts", "update"))
 ):
-    """Allows an administrator (with update accounts permission) to reset any user's password."""
-    if not new_password or len(new_password) < 6:
-        raise HTTPException(status_code=400, detail="New password must be at least 6 characters.")
+    """Allows an administrator (with update accounts permission) to reset a user's password and/or change their username."""
+    if not new_password and not new_username:
+        raise HTTPException(status_code=400, detail="Either new password or new username must be provided.")
         
     try:
         account_from_db = db.query(Account).filter(Account.id == account_id).first()
         if not account_from_db:
             raise HTTPException(status_code=404, detail="Account not found.")
-            
-        account_from_db.password_hash = hash_password(new_password)
+
+        updated_fields = []
+
+        # Handle username update
+        if new_username is not None:
+            username_cleaned = new_username.strip()
+            if not username_cleaned:
+                raise HTTPException(status_code=400, detail="Username cannot be empty.")
+                
+            # Check uniqueness
+            existing_user = db.query(Account).filter(
+                func.lower(Account.username) == username_cleaned.lower(),
+                Account.id != account_id
+            ).first()
+            if existing_user:
+                raise HTTPException(status_code=400, detail="Username already exists. Pick another one.")
+                
+            account_from_db.username = username_cleaned
+            updated_fields.append("username")
+
+        # Handle password update
+        if new_password is not None:
+            if len(new_password) < 6:
+                raise HTTPException(status_code=400, detail="New password must be at least 6 characters.")
+            account_from_db.password_hash = hash_password(new_password)
+            updated_fields.append("password")
+
         db.commit()
+        db.refresh(account_from_db)
         
-        return {"message": f"Password for user '{account_from_db.username}' has been reset successfully."}
+        fields_str = " and ".join(updated_fields)
+        return {"message": f"Account details ({fields_str}) for user '{account_from_db.username}' updated successfully."}
         
     except HTTPException:
         raise
     except SQLAlchemyError as error:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Database error: {str(error)}")
+
 
 
 # ==============================================================================

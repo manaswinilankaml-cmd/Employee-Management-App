@@ -10,8 +10,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
 from database import get_db
-from db_models import Department, Employee
+from db_models import Department, Employee, DepartmentSupervisor
 from auth import require_permission
+
 
 router = APIRouter()
 
@@ -174,3 +175,166 @@ def update_department(
     except SQLAlchemyError as error:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Database error: {str(error)}")
+
+
+# ==============================================================================
+# ROUTE 5: Assign a supervisor to a department
+# FROM: department_id, employee_id
+# TO:   department_supervisors TABLE (new row)
+# ==============================================================================
+@router.post("/departments/{department_id}/supervisors/{employee_id}")
+def assign_department_supervisor(
+    department_id: int,
+    employee_id: int,
+    db: Session = Depends(get_db),
+    user=Depends(require_permission("departments", "update"))
+):
+    """Assigns an employee to supervise a department (for cross-department management)."""
+    try:
+        # Check if department exists
+        department_from_db = db.query(Department).filter(Department.id == department_id).first()
+        if not department_from_db:
+            raise HTTPException(status_code=404, detail="Department not found.")
+
+        # Check if employee exists
+        employee_from_db = db.query(Employee).filter(Employee.id == employee_id).first()
+        if not employee_from_db:
+            raise HTTPException(status_code=404, detail="Employee not found.")
+
+        # Check if duplicate
+        existing = db.query(DepartmentSupervisor).filter(
+            DepartmentSupervisor.department_id == department_id,
+            DepartmentSupervisor.employee_id == employee_id
+        ).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="This employee is already a supervisor for this department.")
+
+        # Create supervisor record
+        new_supervisor = DepartmentSupervisor(department_id=department_id, employee_id=employee_id)
+        db.add(new_supervisor)
+        db.commit()
+
+        return {
+            "message": f"{employee_from_db.name} is now a supervisor of the {department_from_db.name} department.",
+            "employee_id": employee_id,
+            "department_id": department_id
+        }
+
+    except HTTPException:
+        raise
+    except SQLAlchemyError as error:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(error)}")
+
+
+# ==============================================================================
+# ROUTE 6: Remove a supervisor from a department
+# FROM: department_id, employee_id
+# TO:   department_supervisors TABLE (delete row)
+# ==============================================================================
+@router.delete("/departments/{department_id}/supervisors/{employee_id}")
+def remove_department_supervisor(
+    department_id: int,
+    employee_id: int,
+    db: Session = Depends(get_db),
+    user=Depends(require_permission("departments", "update"))
+):
+    """Removes an employee's supervisor status for a department."""
+    try:
+        # Check if supervisor record exists
+        record = db.query(DepartmentSupervisor).filter(
+            DepartmentSupervisor.department_id == department_id,
+            DepartmentSupervisor.employee_id == employee_id
+        ).first()
+
+        if not record:
+            raise HTTPException(status_code=404, detail="Supervisor record not found.")
+
+        db.delete(record)
+        db.commit()
+
+        return {"message": "Supervisor assignment removed successfully."}
+
+    except HTTPException:
+        raise
+    except SQLAlchemyError as error:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(error)}")
+
+
+# ==============================================================================
+# ROUTE 7: List all supervisors of a department
+# FROM: department_supervisors TABLE (filtered by department_id)
+# TO:   API response
+# ==============================================================================
+@router.get("/departments/{department_id}/supervisors")
+def get_department_supervisors(
+    department_id: int,
+    db: Session = Depends(get_db),
+    user=Depends(require_permission("departments", "read"))
+):
+    """Lists all employees who supervise this department."""
+    try:
+        # Check if department exists
+        department_from_db = db.query(Department).filter(Department.id == department_id).first()
+        if not department_from_db:
+            raise HTTPException(status_code=404, detail="Department not found.")
+
+        supervisors = db.query(DepartmentSupervisor).filter(
+            DepartmentSupervisor.department_id == department_id
+        ).all()
+
+        result = []
+        for s in supervisors:
+            result.append({
+                "employee_id": s.employee.id,
+                "emp_id": s.employee.emp_id,
+                "name": s.employee.name,
+                "department": s.employee.department,
+                "role": s.employee.role
+            })
+
+        return result
+
+    except HTTPException:
+        raise
+    except SQLAlchemyError as error:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(error)}")
+
+
+# ==============================================================================
+# ROUTE 8: List all departments supervised by an employee
+# FROM: department_supervisors TABLE (filtered by employee_id)
+# TO:   API response
+# ==============================================================================
+@router.get("/employees/{employee_id}/supervisions")
+def get_employee_supervisions(
+    employee_id: int,
+    db: Session = Depends(get_db),
+    user=Depends(require_permission("departments", "read"))
+):
+    """Lists all departments that this employee supervises."""
+    try:
+        # Check if employee exists
+        employee_from_db = db.query(Employee).filter(Employee.id == employee_id).first()
+        if not employee_from_db:
+            raise HTTPException(status_code=404, detail="Employee not found.")
+
+        supervisions = db.query(DepartmentSupervisor).filter(
+            DepartmentSupervisor.employee_id == employee_id
+        ).all()
+
+        result = []
+        for s in supervisions:
+            result.append({
+                "department_id": s.department.id,
+                "name": s.department.name
+            })
+
+        return result
+
+    except HTTPException:
+        raise
+    except SQLAlchemyError as error:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(error)}")
+

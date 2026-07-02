@@ -28,14 +28,19 @@ export default function Profile() {
   // Admin Reset Password states
   const [isAdminResetting, setIsAdminResetting] = useState(false);
   const [adminResetNewPassword, setAdminResetNewPassword] = useState('');
+  const [adminResetNewUsername, setAdminResetNewUsername] = useState('');
   const [adminResetError, setAdminResetError] = useState('');
   const [isAdminResetSubmitting, setIsAdminResetSubmitting] = useState(false);
+
 
   // Form states
   const [name, setName] = useState('');
   const [department, setDepartment] = useState('');
   const [role, setRole] = useState('');
   const [managerId, setManagerId] = useState('');
+  const [supervisedDepts, setSupervisedDepts] = useState([]);
+  const [initialSupervisedDepts, setInitialSupervisedDepts] = useState([]);
+
 
   // Skill state
   const [newSkill, setNewSkill] = useState('');
@@ -89,7 +94,20 @@ export default function Profile() {
           setAccount(linkedAcc || null);
           setShowAccountCard(true);
         }
+
+        // 4. Fetch Supervised Departments
+        const supervisionRes = await fetch(`/employees/${data.id}/supervisions`, { headers });
+        if (supervisionRes.ok) {
+          const supervisionsData = await supervisionRes.json();
+          const supervisedIds = supervisionsData.map(d => d.department_id);
+          setSupervisedDepts(supervisedIds);
+          setInitialSupervisedDepts(supervisedIds);
+        } else {
+          setSupervisedDepts([]);
+          setInitialSupervisedDepts([]);
+        }
       }
+
     } catch (err) {
       showToast(err.message || 'Error fetching employee details.', 'error');
     }
@@ -165,8 +183,38 @@ export default function Profile() {
         }
       }
 
+      // Check Department Supervision changes (Admin only)
+      if (isAdmin) {
+        // Added supervisions
+        const toAdd = supervisedDepts.filter(id => !initialSupervisedDepts.includes(id));
+        for (const deptId of toAdd) {
+          const res = await fetch(`/departments/${deptId}/supervisors/${employee.id}`, {
+            method: 'POST',
+            headers,
+          });
+          if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.detail || 'Failed to assign department supervisor scope.');
+          }
+        }
+
+        // Removed supervisions
+        const toRemove = initialSupervisedDepts.filter(id => !supervisedDepts.includes(id));
+        for (const deptId of toRemove) {
+          const res = await fetch(`/departments/${deptId}/supervisors/${employee.id}`, {
+            method: 'DELETE',
+            headers,
+          });
+          if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.detail || 'Failed to remove department supervisor scope.');
+          }
+        }
+      }
+
       showToast('Profile information saved successfully.', 'success');
       fetchProfile();
+
     } catch (err) {
       showToast(err.message, 'error');
     } finally {
@@ -335,7 +383,15 @@ export default function Profile() {
     e.preventDefault();
     setAdminResetError('');
     
-    if (adminResetNewPassword.trim().length < 6) {
+    const usernameChanged = adminResetNewUsername.trim() !== account.username;
+    const hasPassword = adminResetNewPassword.trim().length > 0;
+    
+    if (!usernameChanged && !hasPassword) {
+      setAdminResetError('Please modify the username or type a new password.');
+      return;
+    }
+    
+    if (hasPassword && adminResetNewPassword.trim().length < 6) {
       setAdminResetError('New password must be at least 6 characters.');
       return;
     }
@@ -349,25 +405,28 @@ export default function Profile() {
           'Authorization': `Bearer ${user.token}`
         },
         body: JSON.stringify({
-          new_password: adminResetNewPassword.trim()
+          new_password: hasPassword ? adminResetNewPassword.trim() : null,
+          new_username: usernameChanged ? adminResetNewUsername.trim() : null
         })
       });
 
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data.detail || 'Failed to reset password.');
+        throw new Error(data.detail || 'Failed to update account details.');
       }
 
-      showToast(`Password for '${account.username}' reset successfully.`, 'success');
+      showToast(`Account details for '${adminResetNewUsername.trim()}' updated successfully.`, 'success');
       setAdminResetNewPassword('');
+      setAdminResetNewUsername('');
       setIsAdminResetting(false);
       fetchProfile();
     } catch (err) {
-      setAdminResetError(err.message || 'Error resetting password.');
+      setAdminResetError(err.message || 'Error updating account details.');
     } finally {
       setIsAdminResetSubmitting(false);
     }
   };
+
 
   if (loading) {
     return (
@@ -496,54 +555,47 @@ export default function Profile() {
 
               {isAdmin && (
                 <>
-                  <div className="space-y-1.5">
-                    <label className="block text-xs font-bold text-on-surface-variant px-0.5">System Role</label>
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <label className="block text-xs font-bold text-on-surface-variant px-0.5">Role</label>
                     <select
-                      value={rolesList.filter(r => r.is_system_role).some(r => r.name === role) ? role : ""}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        if (val) {
-                          setRole(val);
-                        } else {
-                          setRole("");
-                        }
-                      }}
+                      value={role}
+                      onChange={(e) => setRole(e.target.value)}
                       className="w-full h-12 bg-white/50 border border-outline-variant/30 rounded-xl px-4 text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none cursor-pointer"
                     >
-                      <option value="">Select System Role...</option>
-                      {rolesList
-                        .filter((r) => r.is_system_role)
-                        .map((r) => (
-                          <option key={r.id} value={r.name}>
-                            {r.name}
-                          </option>
-                        ))}
+                      <option value="">Select Role...</option>
+                      {rolesList.map((r) => (
+                        <option key={r.id} value={r.name}>
+                          {r.name}
+                        </option>
+                      ))}
                     </select>
                   </div>
 
-                  <div className="space-y-1.5">
-                    <label className="block text-xs font-bold text-on-surface-variant px-0.5">Custom Role</label>
-                    <select
-                      value={rolesList.filter(r => !r.is_system_role).some(r => r.name === role) ? role : ""}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        if (val) {
-                          setRole(val);
-                        } else {
-                          setRole("");
-                        }
-                      }}
-                      className="w-full h-12 bg-white/50 border border-outline-variant/30 rounded-xl px-4 text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none cursor-pointer"
-                    >
-                      <option value="">Select Custom Role...</option>
-                      {rolesList
-                        .filter((r) => !r.is_system_role)
-                        .map((r) => (
-                          <option key={r.id} value={r.name}>
-                            {r.name}
-                          </option>
-                        ))}
-                    </select>
+                  <div className="space-y-2 sm:col-span-2 border-t border-outline-variant/10 pt-4">
+                    <label className="block text-xs font-bold text-on-surface-variant px-0.5">Supervised Departments (Cross-Department Scope)</label>
+                    <p className="text-[10px] text-on-surface-variant mb-2">Select which departments this employee is allowed to supervise or manage reporting lines for.</p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      {departments.map((dept) => {
+                        const isChecked = supervisedDepts.includes(dept.id);
+                        return (
+                          <label key={dept.id} className="flex items-center gap-2 p-3 bg-white/50 border border-outline-variant/20 rounded-xl cursor-pointer hover:bg-white transition-all text-xs font-medium text-on-surface">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSupervisedDepts([...supervisedDepts, dept.id]);
+                                } else {
+                                  setSupervisedDepts(supervisedDepts.filter(id => id !== dept.id));
+                                }
+                              }}
+                              className="w-4 h-4 rounded text-primary focus:ring-primary"
+                            />
+                            {dept.name}
+                          </label>
+                        );
+                      })}
+                    </div>
                   </div>
                 </>
               )}
@@ -657,7 +709,7 @@ export default function Profile() {
 
                   {isAdminResetting ? (
                     <form onSubmit={handleAdminResetPassword} className="space-y-3 pt-2 border-t border-outline-variant/10">
-                      <p className="text-[11px] font-bold uppercase tracking-wider text-outline">Reset User Password</p>
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-outline">Reset Details / Edit Username</p>
                       
                       {adminResetError && (
                         <div className="p-2.5 rounded-lg bg-error-container text-on-error-container text-[11px] font-semibold flex items-center gap-2 border border-error/10">
@@ -667,16 +719,27 @@ export default function Profile() {
                       )}
 
                       <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-outline uppercase block ml-0.5">New Password</label>
+                        <label className="text-[10px] font-bold text-outline uppercase block ml-0.5">Username</label>
                         <input
                           type="text"
                           required
-                          placeholder="Min 6 characters"
+                          value={adminResetNewUsername}
+                          onChange={(e) => setAdminResetNewUsername(e.target.value)}
+                          className="w-full bg-white/50 border border-outline-variant/20 rounded-xl py-2 px-3 text-xs outline-none focus:ring-2 focus:ring-primary"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-outline uppercase block ml-0.5">New Password (Optional)</label>
+                        <input
+                          type="text"
+                          placeholder="Leave blank to keep current"
                           value={adminResetNewPassword}
                           onChange={(e) => setAdminResetNewPassword(e.target.value)}
                           className="w-full bg-white/50 border border-outline-variant/20 rounded-xl py-2 px-3 text-xs outline-none focus:ring-2 focus:ring-primary"
                         />
                       </div>
+
 
                       <div className="flex gap-2">
                         <button
@@ -684,12 +747,14 @@ export default function Profile() {
                           onClick={() => {
                             setIsAdminResetting(false);
                             setAdminResetNewPassword('');
+                            setAdminResetNewUsername('');
                             setAdminResetError('');
                           }}
                           className="flex-1 py-2 rounded-xl text-xs font-bold border border-outline-variant/20 bg-white/50 hover:bg-white transition-all cursor-pointer"
                         >
                           Cancel
                         </button>
+
                         <button
                           type="submit"
                           disabled={isAdminResetSubmitting}
@@ -706,6 +771,7 @@ export default function Profile() {
                         onClick={() => {
                           setIsAdminResetting(true);
                           setAdminResetNewPassword('');
+                          setAdminResetNewUsername(account.username);
                           setAdminResetError('');
                         }}
                         className="flex-1 py-2.5 rounded-xl text-xs font-bold border border-outline-variant/20 text-on-surface-variant hover:text-primary hover:bg-white/50 transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-sm"
@@ -713,6 +779,7 @@ export default function Profile() {
                         <span className="material-symbols-outlined text-[16px]">lock_reset</span>
                         Reset Pass
                       </button>
+
 
                       {account.role !== 'HR_ADMIN' && account.role !== 'IT_ADMIN' && (
                         <button

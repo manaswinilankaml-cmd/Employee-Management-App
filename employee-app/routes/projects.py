@@ -234,14 +234,21 @@ def get_all_projects(
     callers_role = user["role"]
 
     try:
-        if callers_role in ["HR_ADMIN", "IT_ADMIN", "DEPT_HEAD", "DEPARTMENT HEAD", "DEPARTMENT_HEAD", "MANAGER"]:
+        caller_employee = get_caller_employee(user, db)
+        is_supervisor = False
+        if caller_employee:
+            from db_models import DepartmentSupervisor
+            is_supervisor = db.query(DepartmentSupervisor).filter(
+                DepartmentSupervisor.employee_id == caller_employee.id
+            ).first() is not None
+
+        if callers_role in ["HR_ADMIN", "IT_ADMIN", "DEPT_HEAD", "DEPARTMENT HEAD", "DEPARTMENT_HEAD", "MANAGER"] or is_supervisor:
             # See all projects from projects TABLE
             project_list = db.query(Project).all()
         else:
-            # EMPLOYEE: see only MY projects (join projects TABLE with project_members TABLE)
-            caller_employee = get_caller_employee(user, db)
             if not caller_employee:
                 raise HTTPException(status_code=403, detail="No employee profile linked to your account.")
+
 
             my_id = caller_employee.id
             project_list = (

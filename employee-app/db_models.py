@@ -55,6 +55,10 @@ class Employee(Base):
     # cascade="all, delete-orphan" means: if we delete the employee, remove them from all projects
     project_memberships = relationship("ProjectMember", back_populates="employee", cascade="all, delete-orphan")
 
+    # "department_supervisions" lets us see which departments this employee supervises
+    department_supervisions = relationship("DepartmentSupervisor", back_populates="employee", cascade="all, delete-orphan")
+
+
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # TABLE 2: EmployeeSkill
@@ -116,6 +120,10 @@ class Department(Base):
 
     # Department name (e.g., "HR", "Engineering") — must be unique
     name = Column(String, unique=True, nullable=False)
+
+    # All the supervisors assigned to this department
+    supervisors = relationship("DepartmentSupervisor", back_populates="department", cascade="all, delete-orphan")
+
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -201,4 +209,27 @@ class RolePermission(Base):
     can_read = Column(Boolean, default=False)
     can_update = Column(Boolean, default=False)
     can_delete = Column(Boolean, default=False)
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# TABLE 9: DepartmentSupervisor
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Links employees to departments they supervise. One employee can supervise many departments.
+# One department can have many supervisors (e.g. Department Head, CTO, CEO).
+class DepartmentSupervisor(Base):
+    __tablename__ = "department_supervisors"
+    __table_args__ = (UniqueConstraint("employee_id", "department_id"),)
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    # Which employee?
+    employee_id = Column(Integer, ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
+
+    # Which department?
+    department_id = Column(Integer, ForeignKey("departments.id", ondelete="CASCADE"), nullable=False)
+
+    # Relationships for easy navigation
+    employee = relationship("Employee", back_populates="department_supervisions")
+    department = relationship("Department", back_populates="supervisors")
+
   

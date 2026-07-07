@@ -122,22 +122,8 @@ export default function Dashboard() {
             Welcome back, <span className="text-primary font-bold">{loggedEmployee?.name || user?.username}</span>. Here is the operational status.
           </p>
         </div>
-        <div className="flex items-center gap-4 w-full md:w-auto">
-          <div className="relative flex-1 md:flex-none">
-            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-[20px]">
-              search
-            </span>
-            <input
-              type="text"
-              placeholder="Quick search..."
-              className="pl-10 pr-4 py-2 w-full md:w-64 rounded-full bg-white/50 border border-outline-variant/30 focus:bg-white focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none text-sm"
-            />
-          </div>
-          <button className="p-2.5 rounded-full bg-white/70 border border-white/50 text-on-surface-variant hover:text-primary hover:bg-white shadow-sm active:scale-95 transition-all">
-            <span className="material-symbols-outlined text-[20px]">notifications</span>
-          </button>
-        </div>
       </header>
+
 
       {/* Stats Cards Row */}
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
@@ -296,27 +282,7 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Visualizations Mock panels */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
-            <div className="glass-card p-8 rounded-3xl shadow-sm h-64 flex flex-col justify-center items-center text-center">
-              <div className="w-16 h-16 mb-4 rounded-full border-4 border-primary/20 flex items-center justify-center bg-primary/5">
-                <span className="material-symbols-outlined text-primary text-3xl">pie_chart</span>
-              </div>
-              <h5 className="font-bold text-on-surface mb-2">Resource Allocation</h5>
-              <p className="text-sm text-on-surface-variant px-4">
-                Operations holds the largest resource footprint this quarter.
-              </p>
-            </div>
-            <div className="glass-card p-8 rounded-3xl shadow-sm h-64 flex flex-col justify-center items-center text-center">
-              <div className="w-16 h-16 mb-4 rounded-full border-4 border-secondary/20 flex items-center justify-center bg-secondary/5">
-                <span className="material-symbols-outlined text-secondary text-3xl">show_chart</span>
-              </div>
-              <h5 className="font-bold text-on-surface mb-2">Platform Activity</h5>
-              <p className="text-sm text-on-surface-variant px-4">
-                Service logs report high system uptime and active API transactions.
-              </p>
-            </div>
-          </div>
+
         </div>
 
       </div>

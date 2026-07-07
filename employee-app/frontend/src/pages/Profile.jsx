@@ -544,7 +544,7 @@ export default function Profile() {
                 <select
                   value={department}
                   onChange={(e) => setDepartment(e.target.value)}
-                  disabled={isEmployeeRole}
+                  disabled={!isAdmin}
                   className="w-full h-12 bg-white/50 border border-outline-variant/30 rounded-xl px-4 text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed"
                 >
                   {departments.map(dept => (
@@ -552,6 +552,7 @@ export default function Profile() {
                   ))}
                 </select>
               </div>
+
 
               {isAdmin && (
                 <>

@@ -4,10 +4,7 @@ utils.py — Helper functions used across the project.
 These are small "tools" that other files can borrow when they need them.
 """
 
-from passlib.context import CryptContext
-
-# Create a password hashing context using bcrypt
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+import bcrypt
 
 
 def generate_employee_id(org_code: str, year: int, number: int) -> str:
@@ -28,11 +25,16 @@ def hash_password(password: str) -> str:
     Scrambles a password using bcrypt so nobody can read it.
     Bcrypt includes a salt automatically.
     """
-    return pwd_context.hash(password)
+    password_bytes = password.encode('utf-8')
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(password_bytes, salt)
+    return hashed.decode('utf-8')
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """
     Checks if a plain-text password matches the stored scrambled version.
     """
-    return pwd_context.verify(plain_password, hashed_password)
+    plain_bytes = plain_password.encode('utf-8')
+    hashed_bytes = hashed_password.encode('utf-8')
+    return bcrypt.checkpw(plain_bytes, hashed_bytes)
